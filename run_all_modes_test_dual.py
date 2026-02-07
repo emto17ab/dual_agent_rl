@@ -8,7 +8,7 @@ import re
 import sys
 
 # Configuration
-CHECKPOINT_BASE = "dual_agent_nyc_man_south_continued_v4_mode{}"
+CHECKPOINT_BASE = "dual_agent_nyc_man_south_v2_mode{}"
 CITY = "nyc_man_south"
 MODEL_TYPE = "running"
 
@@ -101,7 +101,7 @@ def format_value(mean, std):
 def main():
     # Collect results for all modes
     all_results = {}
-    modes_to_run = [2]
+    modes_to_run = [1,2]
     
     for mode in modes_to_run:
         output = run_mode(mode)

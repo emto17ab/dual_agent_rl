@@ -43,7 +43,7 @@ subject to
 
 main {
   thisOplModel.generate();
-  cplex.threads = 3;
+  cplex.threads = 6;
   cplex.solve();
   var ofile = new IloOplOutputFile(thisOplModel.path);
   ofile.write("flow=[")

@@ -8,9 +8,9 @@ import re
 import sys
 
 # Configuration
-CHECKPOINT_BASE = "single_agent_washington_dc_mode{}"
-CITY = "washington_dc"
-MODEL_TYPE = "running"
+CHECKPOINT_BASE = "single_agent_nyc_man_south_v2_mode{}"
+CITY = "nyc_man_south"
+MODEL_TYPE = "test"
 
 # Metrics to collect (in order for the table)
 METRIC_PATTERNS = {

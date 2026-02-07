@@ -487,6 +487,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--od_price_actions",
+    action="store_true",
+    default=False,
+    help="Use OD-based price scalars (N×N outputs) instead of origin-based (N outputs) (default: False)",
+)
+
+parser.add_argument(
     "--no_share_info",
     action="store_true",
     default=False,
@@ -521,6 +528,14 @@ args = parser.parse_args()
 if not (0.0 <= args.agent0_vehicle_ratio <= 1.0):
     raise ValueError(f"agent0_vehicle_ratio must be between 0.0 and 1.0, got {args.agent0_vehicle_ratio}")
 
+# Automatically enable use_od_prices when od_price_actions is True
+if args.od_price_actions and not args.use_od_prices:
+    print("=" * 80)
+    print("INFO: Automatically enabling --use_od_prices since --od_price_actions is set")
+    print("      (OD-based actions require OD-based observations)")
+    print("=" * 80)
+    args.use_od_prices = True
+
 # Set device
 args.cuda = args.cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
@@ -551,7 +566,7 @@ if not args.test:
                 total_vehicles=args.total_vehicles)
 
     # Create the environment
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_agent=args.fix_agent, choice_intercept=choice_intercept[city], wage=wage[city], use_dynamic_wage_man_south=args.use_dynamic_wage_man_south)
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_agent=args.fix_agent, choice_intercept=choice_intercept[city], wage=wage[city], use_dynamic_wage_man_south=args.use_dynamic_wage_man_south, od_price_actions=args.od_price_actions)
     
     # Print fixed agent information
     if args.fix_agent == 0:
@@ -1340,7 +1355,7 @@ else:
                 agent0_vehicle_ratio=args.agent0_vehicle_ratio,
                 total_vehicles=args.total_vehicles)
 
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_agent=args.fix_agent, choice_intercept=choice_intercept[city], wage=wage[city], use_dynamic_wage_man_south=args.use_dynamic_wage_man_south)
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_agent=args.fix_agent, choice_intercept=choice_intercept[city], wage=wage[city], use_dynamic_wage_man_south=args.use_dynamic_wage_man_south, od_price_actions=args.od_price_actions)
     
     # Print fixed agent information
     if args.fix_agent == 0:
@@ -1400,6 +1415,7 @@ else:
                     gamma=args.gamma,
                     agent_id = a,
                     use_od_prices = args.use_od_prices,
+                    od_price_actions = args.od_price_actions,
                     no_share_info = args.no_share_info,
                     reward_scale=args.reward_scalar,
                 )

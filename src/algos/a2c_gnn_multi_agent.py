@@ -161,6 +161,7 @@ class A2C(nn.Module):
         agent_id,
         json_file,
         use_od_prices,
+        od_price_actions=False,  # whether to use OD-based price actions
         no_share_info=False,  # whether to share competitor pricing info
         reward_scale=1000.0,  # reward scaling factor
         eps=np.finfo(np.float32).eps.item(),
@@ -171,6 +172,7 @@ class A2C(nn.Module):
         self.env = env
         self.act_dim = env.nregion
         self.agent_id = agent_id
+        self.od_price_actions = od_price_actions
 
         # Set the mode
         self.mode = mode
@@ -186,7 +188,7 @@ class A2C(nn.Module):
         self.device = device
 
         # Set the Actor and Critic networks
-        self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode)
+        self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode, od_price_actions=od_price_actions)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
     
         # Set the observation parser
@@ -251,14 +253,24 @@ class A2C(nn.Module):
         # Convert to numpy array
         action_np = a.detach().cpu().numpy()
         
-        # Handle different action shapes based on mode:
-        # Mode 0 & 1: shape [nregion, 1] -> flatten to [nregion]
-        # Mode 2: shape [nregion, 2] -> keep as 2D [[price, reb], ...]
-        if action_np.shape[-1] == 1:
-            # Mode 0 or 1: squeeze last dimension to get 1D array
-            action_array = action_np.squeeze(-1)
+        # Handle different action shapes based on mode and od_price_actions:
+        # Mode 0: [nregion] -> 1D array
+        # Mode 1 origin: [nregion] -> 1D array
+        # Mode 1 OD: [nregion, nregion] -> 2D array
+        # Mode 2 origin: [nregion, 2] -> 2D array [[price, reb], ...]
+        # Mode 2 OD: [nregion, nregion+1] -> 2D array [[OD prices..., reb], ...]
+        if self.mode == 0:
+            # Mode 0: already [nregion]
+            action_array = action_np
+        elif self.mode == 1:
+            if self.od_price_actions:
+                # Mode 1 OD: [nregion, nregion] - keep as 2D
+                action_array = action_np
+            else:
+                # Mode 1 origin: [nregion] - keep as 1D
+                action_array = action_np
         else:
-            # Mode 2: return 2D array as-is
+            # Mode 2: keep as 2D array (either [nregion, 2] or [nregion, nregion+1])
             action_array = action_np
         
         # Return the action and optionally concentration parameter and log probability

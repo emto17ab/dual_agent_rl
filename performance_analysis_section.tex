@@ -1,0 +1,57 @@
+\subsubsection{Single-Agent Monopolistic Performance}
+
+We first examine the monopolistic setting where a single operator controls the entire fleet and serves all demand. Table~\ref{tab:policy_performance} presents the total rewards achieved by different control strategies across the three cities. The joint pricing and rebalancing policy consistently outperforms all baselines and single-mode policies across all environments, demonstrating the synergistic benefits of coordinated control. In San Francisco, joint control achieves a reward of 12,447.47, representing a 23.0\% improvement over rebalancing alone and a 43.5\% improvement over pricing alone. This substantial gain suggests that in highly variable demand environments, the coordination between pricing and fleet positioning is particularly valuable.
+
+\begin{table}[h]
+\centering
+\caption{Performance of the training policies in the three scenarios. We perform 10 tests for each policy and report the average performance with standard deviations in parentheses. Bold indicates the best-performing policies. In the columns, the policy ``NC'' represents No Control, ``UD'' represents Uniform Distribution, ``Reb.'' represents Rebalancing, and ``Joint'' represents the joint Pricing and Rebalancing policy.}
+\label{tab:policy_performance}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l c c c c c}
+\toprule
+City & NC & UD & Reb. & Pricing & Joint \\
+\midrule
+San Francisco & \makecell{6345.49 \\ \footnotesize (251.60)} & \makecell{9444.98 \\ \footnotesize (318.89)} & \makecell{10116.42 \\ \footnotesize (362.19)} & \makecell{8675.68 \\ \footnotesize (130.66)} & \makecell{\textbf{12447.47} \\ \footnotesize \textbf{(159.63)}} \\[0.5em]
+Washington DC & \makecell{13153.97 \\ \footnotesize (324.58)} & \makecell{15612.59 \\ \footnotesize (383.28)} & \makecell{16099.46 \\ \footnotesize (364.72)} & \makecell{14118.33 \\ \footnotesize (313.26)} & \makecell{\textbf{16574.46} \\ \footnotesize \textbf{(334.12)}} \\[0.5em]
+NYC Man. South & \makecell{16283.02 \\ \footnotesize (487.67)} & \makecell{18224.77 \\ \footnotesize (260.39)} & \makecell{18470.56 \\ \footnotesize (304.30)} & \makecell{18290.21 \\ \footnotesize (391.38)} & \makecell{\textbf{18662.76} \\ \footnotesize \textbf{(289.01)}} \\[0.5em]
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+The magnitude of improvement from joint control, however, varies considerably across cities. In Washington DC, joint control achieves 16,574.46, only 2.9\% above rebalancing alone, while in NYC Manhattan South, the improvement shrinks to merely 1.0\% (18,662.76 vs. 18,470.56). This diminishing marginal benefit of pricing in lower-variability environments suggests that when demand patterns are more predictable and spatially balanced, strategic rebalancing alone can achieve near-optimal performance, and the additional complexity of dynamic pricing provides limited incremental value.
+
+Table~\ref{tab:performance_metrics} provides detailed operational metrics for the three active control modes. A notable pattern emerges in pricing behavior: the learned price scalars vary systematically with demand characteristics. In San Francisco, the joint policy sets conservative prices (scalar 0.86), significantly below historical reference levels, effectively using pricing to stimulate demand in a highly variable environment. Conversely, in Washington DC and NYC Manhattan South, the joint policy sets prices near or above reference levels (1.08 and 1.01 respectively), extracting higher revenue from more stable demand streams. Interestingly, joint control achieves lower rebalancing costs compared to rebalancing-only policies across all cities (e.g., 667.80 vs. 919.98 in San Francisco), indicating that strategic pricing reduces the need for costly vehicle repositioning by shaping demand patterns.
+
+The service quality metrics reveal important trade-offs between different control strategies. In San Francisco, pure rebalancing achieves the lowest waiting times (0.26 minutes) by maintaining excellent fleet positioning but serves relatively modest demand (971.50 passengers). Joint control accepts moderately higher waiting times (0.51 minutes) but dramatically increases served demand to 1,308.90 passengers by using pricing to attract additional trips. This 34.7\% increase in served demand illustrates how pricing can expand market size beyond what rebalancing alone achieves. Washington DC exhibits a different pattern: joint control delivers both the lowest waiting times (0.19 minutes) and high served demand (3,748.70), suggesting that in larger networks with more vehicles, the framework can simultaneously optimize service quality and demand capture. In NYC Manhattan South, the high baseline queue lengths (14.20 for rebalancing) indicate capacity constraints, limiting the effectiveness of operational improvements.
+
+\begin{table*}[ht]
+\centering
+\caption{Performance metrics of the three policies in San Francisco, Washington DC, and NYC Manhattan South. The numbers in parentheses indicate the standard deviations of each metric for 10 test runs. ``Price'' is the average price scalar set by the agent, and ``Wait/mins'' is the waiting time of the served passengers in minutes. Bold indicates the best-performing policies. ``Reb.'' represents Rebalancing, ``Pricing'' is the Pricing policy, and ``Joint'' is the joint Pricing and Rebalancing policy. All values are averaged across all the regions.}
+\label{tab:performance_metrics}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{San Francisco} & \multicolumn{3}{c}{Washington DC} & \multicolumn{3}{c}{NYC Man. South} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+Policy & Reb. & Pricing & Joint & Reb. & Pricing & Joint & Reb. & Pricing & Joint \\
+\midrule
+Reward & \makecell{10116.42 \\ \footnotesize (362.19)} & \makecell{8675.68 \\ \footnotesize (130.66)} & \makecell{\textbf{12447.47} \\ \footnotesize \textbf{(159.63)}} & \makecell{16099.46 \\ \footnotesize (364.72)} & \makecell{14118.33 \\ \footnotesize (313.26)} & \makecell{\textbf{16574.46} \\ \footnotesize \textbf{(334.12)}} & \makecell{18470.56 \\ \footnotesize (304.30)} & \makecell{18290.21 \\ \footnotesize (391.38)} & \makecell{\textbf{18662.76} \\ \footnotesize \textbf{(289.01)}} \\[0.5em]
+\cmidrule(lr){1-10}
+Rebalancing Costs & \makecell{919.98 \\ \footnotesize (29.11)} & \makecell{0.00 \\ \footnotesize (0.00)} & \makecell{667.80 \\ \footnotesize (21.06)} & \makecell{3706.65 \\ \footnotesize (150.48)} & \makecell{0.00 \\ \footnotesize (0.00)} & \makecell{3520.65 \\ \footnotesize (58.42)} & \makecell{1394.40 \\ \footnotesize (95.83)} & \makecell{---} & \makecell{1539.90 \\ \footnotesize (102.35)} \\[0.5em]
+\cmidrule(lr){1-10}
+Rebalance Trips & \makecell{539.80 \\ \footnotesize (16.04)} & \makecell{0.00 \\ \footnotesize (0.00)} & \makecell{393.10 \\ \footnotesize (14.51)} & \makecell{1134.70 \\ \footnotesize (34.26)} & \makecell{0.00 \\ \footnotesize (0.00)} & \makecell{1177.80 \\ \footnotesize (28.40)} & \makecell{290.00 \\ \footnotesize (21.34)} & \makecell{---} & \makecell{321.30 \\ \footnotesize (21.63)} \\[0.5em]
+\cmidrule(lr){1-10}
+Price & \makecell{---} & \makecell{0.75 \\ \footnotesize (0.00)} & \makecell{0.86 \\ \footnotesize (0.00)} & \makecell{---} & \makecell{1.17 \\ \footnotesize (0.00)} & \makecell{1.08 \\ \footnotesize (0.00)} & \makecell{---} & \makecell{1.05 \\ \footnotesize (0.00)} & \makecell{1.01 \\ \footnotesize (0.00)} \\[0.5em]
+\cmidrule(lr){1-10}
+Wait/mins & \makecell{0.26 \\ \footnotesize (0.05)} & \makecell{0.52 \\ \footnotesize (0.03)} & \makecell{0.51 \\ \footnotesize (0.04)} & \makecell{0.32 \\ \footnotesize (0.03)} & \makecell{0.45 \\ \footnotesize (0.03)} & \makecell{0.19 \\ \footnotesize (0.02)} & \makecell{0.64 \\ \footnotesize (0.02)} & \makecell{0.40 \\ \footnotesize (0.03)} & \makecell{0.58 \\ \footnotesize (0.03)} \\[0.5em]
+\cmidrule(lr){1-10}
+Queue & \makecell{1.86 \\ \footnotesize (0.36)} & \makecell{4.60 \\ \footnotesize (0.23)} & \makecell{5.45 \\ \footnotesize (0.37)} & \makecell{5.20 \\ \footnotesize (0.49)} & \makecell{5.18 \\ \footnotesize (0.32)} & \makecell{2.49 \\ \footnotesize (0.27)} & \makecell{14.20 \\ \footnotesize (0.49)} & \makecell{6.95 \\ \footnotesize (0.39)} & \makecell{12.52 \\ \footnotesize (0.67)} \\[0.5em]
+\cmidrule(lr){1-10}
+Served Demand & \makecell{971.50 \\ \footnotesize (32.22)} & \makecell{823.60 \\ \footnotesize (10.97)} & \makecell{1308.90 \\ \footnotesize (16.82)} & \makecell{4254.20 \\ \footnotesize (52.47)} & \makecell{2393.40 \\ \footnotesize (51.26)} & \makecell{3748.70 \\ \footnotesize (58.21)} & \makecell{3557.70 \\ \footnotesize (36.60)} & \makecell{2971.10 \\ \footnotesize (60.43)} & \makecell{3557.50 \\ \footnotesize (35.31)} \\[0.5em]
+\cmidrule(lr){1-10}
+Total Demand & \makecell{1092.10 \\ \footnotesize (42.86)} & \makecell{1319.00 \\ \footnotesize (34.71)} & \makecell{1736.90 \\ \footnotesize (33.86)} & \makecell{4753.00 \\ \footnotesize (76.79)} & \makecell{3174.00 \\ \footnotesize (46.58)} & \makecell{3919.90 \\ \footnotesize (71.49)} & \makecell{4705.70 \\ \footnotesize (73.36)} & \makecell{3452.70 \\ \footnotesize (60.75)} & \makecell{4511.70 \\ \footnotesize (76.97)} \\[0.5em]
+\bottomrule
+\end{tabular}%
+}
+\end{table*}

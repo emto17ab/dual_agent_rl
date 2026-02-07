@@ -14,9 +14,12 @@ import random
 class AMoD:
     # initialization
     # updated to take scenario and beta (cost for rebalancing) as input
-    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, fix_agent, choice_intercept, wage, use_dynamic_wage_man_south=False):
+    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, fix_agent, choice_intercept, wage, use_dynamic_wage_man_south=False, od_price_actions=False):
         # Setting the scenario
         self.scenario = deepcopy(scenario)
+        
+        # Setting OD-based price actions flag
+        self.od_price_actions = od_price_actions
 
         # Setting the mode of the simulation
         self.mode = mode  # Mode of rebalancing (0:manul, 1:pricing, 2:both. default 1)
