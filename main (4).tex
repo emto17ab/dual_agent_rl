@@ -1,0 +1,783 @@
+\documentclass[lettersize,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+\usepackage{array}
+\usepackage[caption=false,font=normalsize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{cite}
+\usepackage{orcidlink}
+\hyphenation{op-tical net-works semi-conduc-tor IEEE-Xplore}
+\usepackage{svg}
+\svgpath{{Images/}}
+\usepackage{booktabs}  % For professional looking tables
+\usepackage{makecell}  % For line breaks in cells
+\usepackage{graphicx}  % For resizing (if absolutely necessary)
+\usepackage{multirow}  % For merged cells
+\usepackage{array}
+\usepackage{float}
+
+% updated with editorial comments 8/9/2021
+\newcommand{\orcidsup}[1]{\textsuperscript{\orcidlink{#1}}}
+\begin{document}
+
+\title{Competitive Multi-Operator Reinforcement Learning for Joint Pricing and Fleet Rebalancing in Autonomous Mobility-on-Demand Systems}
+
+\author{
+\textbf{Author: }Emil Kragh Toft (s233791)\\
+\textbf{Supervisors: }Carolin Schmidt and Filipe Rodrigues
+}
+
+% The paper headers
+\markboth{MSc.\ Thesis Business Analytics, 30 ECTS, Department of Technology, Management and Economics, 14 February 2026}%
+{}
+
+\maketitle
+
+\begin{abstract}
+Autonomous Mobility-on-Demand (AMoD) systems promise to revolutionize urban transportation by eliminating driver costs and providing affordable on-demand services. However, realistic AMoD markets will be competitive, with multiple operators competing for passengers through strategic pricing and fleet deployment. Existing reinforcement learning approaches for AMoD control focus on single-operator settings and fail to capture competitive market dynamics. We introduce a multi-operator reinforcement learning framework where two operators simultaneously learn joint pricing and fleet rebalancing policies while competing for demand. By integrating discrete choice theory, passenger allocation emerges endogenously from utility-maximizing decisions based on fare price, travel time, and passenger wages. The framework incorporates wage-sensitive demand modeling, enabling pricing strategies to adapt to regional economic differences. Through experiments on real-world data from multiple cities, we demonstrate that competitive dynamics fundamentally alter learned policies compared to monopolistic settings. Operators develop sophisticated strategic behaviors, with competition leading to lower prices and distinct fleet positioning patterns. This work provides insights into competitive autonomous mobility markets and contributes to platform design and policy decisions for multi-operator AMoD systems.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Autonomous Mobility-on-Demand, Multi-Operator Reinforcement Learning, Competitive Pricing, Fleet Rebalancing, Discrete Choice Models, Graph Convolutional Networks
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{U}{rban} mobility systems worldwide face mounting pressures from population growth, urbanization, and evolving consumer expectations. Traditional transportation modes—private vehicles and public transit—struggle to efficiently meet the diverse mobility needs of modern cities. Private car ownership contributes to congestion, parking scarcity, and emissions, while public transit often lacks the flexibility and coverage demanded by passengers. This gap has fueled the rapid growth of ride-hailing services over the past decade, fundamentally transforming urban mobility patterns \cite{Ceder02102021}.
+
+The advent of autonomous vehicle technology presents an opportunity to further revolutionize urban transportation through Autonomous Mobility-on-Demand (AMoD) systems. By eliminating driver compensation, one of the largest expenses for ride-hailing platforms, AMoD could provide affordable, convenient, and sustainable door-to-door transportation at scale \cite{WANG2024104728}. However, unlike traditional public transit systems that are typically operated as monopolies or regulated utilities, AMoD markets are likely to be competitive, with multiple operators deploying fleets and competing for passengers.
+
+In competitive AMoD markets, operators must make strategic decisions about pricing and fleet deployment while anticipating and responding to competitor actions. A price reduction by one operator affects its own demand and simultaneously diverts passengers from competitors. Fleet positioning decisions similarly influence service quality and market share dynamics. These strategic interactions create a complex game-theoretic environment where optimal policies depend on competitor behavior.
+
+Reinforcement Learning (RL) has emerged as a powerful approach for sequential decision-making in complex environments, demonstrating success in games, robotics, and various control problems. For AMoD systems, RL offers the advantage of learning near-optimal policies directly from data without requiring perfect models of demand patterns, traffic conditions, or competitor strategies. Existing research on RL for AMoD systems predominantly focuses on centralized, single-operator settings where the objective is to maximize social welfare or system efficiency through optimal vehicle rebalancing \cite{9683135, 8970873, 8917533, 8317908, TANG2020102844}, pricing \cite{LEI2023102848, CHEN2021103272, 10.1145/3474841}, or both \cite{11063454}. While these studies provide valuable insights into operational challenges, they do not address the competitive dynamics inherent in realistic multi-operator market structures.
+
+In this work, we develop a competitive multi-operator reinforcement learning framework for joint pricing and fleet rebalancing in AMoD systems. The approach models a realistic scenario where two operators simultaneously learn and adapt their strategies while competing for passengers. We incorporate a discrete choice model that captures how passengers select between operators based on price, travel time, and passenger wages, reflecting real behavioral patterns observed in transportation economics. This choice model creates a dynamic coupling between operators' actions and market outcomes, enabling the emergence of complex competitive strategies.
+
+The main contributions of this paper are as follows:
+\begin{itemize}
+    \item We formulate a competitive, dual-operator AMoD control problem in which two independent operators jointly learn pricing and fleet rebalancing policies using reinforcement learning, extending prior joint-control frameworks beyond the single-operator setting.
+    
+    \item We integrate a passenger choice mechanism into the learning loop, allowing demand allocation between competing operators to emerge endogenously from operator actions rather than being imposed exogenously.
+    
+    \item We provide an empirical analysis of how competition alters learned strategies, service quality, and market efficiency relative to monopolistic control through experiments on real-world data from multiple cities.
+\end{itemize}
+
+The remainder of this paper is organized as follows. Section \ref{sec:lit_review} reviews related work on AMoD rebalancing and pricing problems. Section \ref{sec:preliminaries} provides a brief theoretical overview of reinforcement learning and graph neural networks. Section \ref{sec:AMOD Control} presents the AMoD control problem formulation in both single-operator and competitive dual-operator contexts. Section \ref{sec:Experiments} presents our experimental results and analysis, demonstrating how the framework learns control policies in a competitive dual-operator setting and how these policies differ from those in single-operator scenarios. Section \ref{sec:conclusion} concludes with a discussion of future research directions in competitive autonomous mobility systems.
+
+\section{Literature Review}
+\label{sec:lit_review}
+Shared mobility and on-demand transportation systems face persistent operational challenges arising from the uneven spatial and temporal distribution of vehicles. Existing literature primarily addresses these inefficiencies through rebalancing strategies and dynamic pricing mechanisms designed to better align supply with demand. Additionally, an emerging body of work examines these issues in multi-operator settings where competition between service providers influences pricing, fleet allocation, and overall system performance.
+
+\subsection{Rebalancing}
+Early foundational work by Zhang and Pavone \cite{doi:10.1177/0278364915581863, doi:10.1177/0278364912444766} modeled Autonomous MoD systems as closed Jackson queueing networks, establishing a mathematical framework for understanding system dynamics and flow conservation constraints. Building on this foundation, Model Predictive Control (MPC) approaches have been extensively applied for real-time fleet optimization \cite{CALAFIORE2019169, WARRINGTON2019110, 8569459, 8460966}. These methods partition cities into zones and employ discrete-time dynamical models to optimize fleet distribution. Tsao et al. \cite{8569459} proposed scalable predictive control frameworks, and Warrington et al. \cite{WARRINGTON2019110} developed two-stage stochastic approximation methods that explicitly account for demand uncertainty. While these optimization approaches provide strong theoretical guarantees, they face practical challenges when demand patterns deviate from assumed distributions or when computational requirements exceed real-time constraints \cite{8460966}.
+
+Recognizing that demand prediction is inherently uncertain, researchers have developed robust optimization frameworks that explicitly account for forecast errors and stochastic patterns. Guo et al. \cite{GUO2021161} introduced robust Matching-Integrated Vehicle Rebalancing (MIVR) models that consider sets of possible demand realizations rather than single forecasts. Data-driven predictive prescription approaches combine real-time forecasting with stochastic programming \cite{9744407}, generating rebalancing actions that explicitly incorporate prediction uncertainty. The integration of robust optimization with MPC has proven particularly effective for handling stochastic urban mobility patterns, enabling controllers to hedge against worst-case demand fluctuations while avoiding overly conservative solutions \cite{8460966}.
+
+Reinforcement learning represents a paradigm shift from model-based optimization to data-driven policy learning. Unlike optimization approaches requiring explicit mathematical models, RL methods learn rebalancing policies directly from observed state transitions and rewards. Early deep RL applications demonstrated passenger waiting time reductions compared to heuristic approaches \cite{10.46300/9106.2022.16.80}, while Wen et al. \cite{8317908} introduced deep Q-network methods achieving near-optimal performance with significantly reduced computational requirements. The key advantage of RL lies in its ability to adapt to complex spatiotemporal dynamics without explicit demand models. However, RL faces scalability challenges in large urban networks where state and action spaces grow exponentially with the number of zones.
+
+To address these scalability challenges while leveraging the network structure of urban transportation systems, Gammelli et al. \cite{9683135} proposed a Graph Convolutional Network (GCN) reinforcement learning framework for autonomous mobility-on-demand systems. This approach models transportation networks as graphs with nodes representing city areas and edges representing connectivity, learning node-wise policies by aggregating information from neighboring nodes through message-passing operations. The GCN architecture captures spatial dependencies in demand and supply patterns, enabling decisions informed by both local conditions and connected area states. The architecture naturally handles expanding service areas and topology changes, making it particularly suitable for real-world deployment. The dual-operator framework presented in this paper builds on this work.
+
+\subsection{Dynamic Pricing and Joint Policy Optimization}
+While rebalancing addresses supply-demand imbalances by relocating vehicles, dynamic pricing offers a complementary mechanism by influencing demand patterns themselves. Early research on dynamic pricing in MoD systems focused on profit maximization and congestion management, with most approaches relying on equilibrium-based models where system dynamics are modeled as constraints in an optimization framework \cite{10.2139/ssrn.2568258, 10.2139/ssrn.2868080, Cachon2016TheRO, 10.1145/2940716.2940798}. In the equilibrium-based approach, the pricing policy affects the equilibrium, which is subsequently used to calculate revenue. In operations research-based works, demand is typically considered elastic, and the pricing decision is shaped by optimization frameworks and the constraint set \cite{10.48550/arXiv.1802.03559, guan2021sharedmobility}. Pricing strategies can reduce demand in oversaturated areas while stimulating requests in underutilized zones, effectively reshaping the spatial distribution of trip requests to better match vehicle availability. However, implementing pricing or rebalancing in isolation can be overly restrictive and fails to account for emerging synergies between the two strategies \cite{9304517, 11063454}.
+
+The recognition that rebalancing and pricing interact in complex ways has motivated joint optimization frameworks. Proper pricing influences where and when passengers request rides, affecting where vehicles are needed; conversely, effective rebalancing reduces wait times and enables different pricing strategies. Bilevel optimization frameworks have emerged as a principled approach for joint decision-making, formulating operator decisions (pricing, vehicle relocation) at the upper level while modeling passenger responses (demand, route choice) at the lower level \cite{10.1155/2022/9120129}. Li et al. \cite{11063454} developed a reinforcement learning approach for learning joint rebalancing and dynamic pricing policies for autonomous mobility-on-demand that integrates GCN architectures with hierarchical policy optimization. This framework simultaneously learns rebalancing and pricing policies, leveraging GCN spatial reasoning capabilities to scale across large urban networks. The approach employs a bilevel structure to improve computational tractability: the upper-level GCN policy determines target vehicle distributions per node and node-based pricing decisions, which are then used by a lower-level optimization routine, typically a linear program, to compute minimum-cost origin-destination (OD) rebalancing flows to achieve those target distributions. This hierarchical architecture enables the model to capture both spatial dependencies through GCN message-passing and strategic pricing-rebalancing interactions through joint policy optimization.
+
+Motivated by recent work on joint policy optimization for AMoD systems \cite{11063454}, this work addresses the critical gap of explicitly modeling price-responsive demand through the integration of discrete choice models. In this approach, incoming ride requests are distributed to available operators based on a choice model where prices directly affect the utility of each service option. Passengers evaluate each service option according to a utility function that incorporates price, wage, and travel time. If no option exceeds their reservation utility threshold, they reject all alternatives and exit the system. This choice-based demand adjustment mechanism enables the system to capture elastic demand responses to pricing decisions, providing a more realistic representation of passenger's behavior and allowing the joint rebalancing-pricing policy to actively shape demand patterns rather than treating demand as exogenous. Additionally, this work explores how salary levels in different regions affect passenger choices, capturing heterogeneous price sensitivity across geographic areas and enabling more spatially nuanced pricing strategies that account for local economic conditions.
+
+\subsection{Multi-Operator Environments}
+While much of the literature focuses on single-operator optimization, real-world mobility markets increasingly feature multiple competing platform operators, each managing its own vehicle fleet and simultaneously optimizing pricing and rebalancing strategies. This competitive setting introduces fundamentally different dynamics compared to centralized optimization, as operators must account for strategic interactions with rivals while pursuing their individual objectives.
+
+Multi-operator competition in ride-hailing and autonomous mobility-on-demand systems has been studied through game-theoretic frameworks that model the strategic interactions between platforms competing for both drivers and passengers. Yang and Ramezani \cite{yang2025intraday} analyze intraday competition in duopoly ride-hailing markets, examining how platforms adjust pricing and service strategies throughout the day in response to competitor actions and fluctuating demand. Research on competing AMoD operators demonstrates that fragmented markets with multiple independent operators can reduce pooling efficiency and overall system performance compared to monopolistic or regulated scenarios \cite{10.3389/ffutr.2022.915219, 10.2139/ssrn.4044250}. Game-theoretic models reveal that platforms engage in noncooperative pricing games where passenger fares must be strategically adjusted, as passengers can easily switch between platforms \cite{9929365}. Studies examining quality-of-service competition show that platforms must balance pricing strategies with matching efficiency and wait times, as these factors jointly determine market share in competitive environments \cite{10.1109/ITSC57777.2023.10421926}.
+
+This work addresses joint rebalancing-pricing optimization in a multi-operator competitive setting, where two competing operators simultaneously optimize their strategies while accounting for competitor actions and passenger responses. This introduces fundamentally different challenges compared to single-operator settings \cite{11063454}: rather than focusing purely on coordination and optimality, multi-operator environments require modeling strategic interactions between operators with potentially conflicting objectives. These game-theoretic considerations and competitive dynamics fundamentally alter the optimization landscape, requiring operators to anticipate and respond to rival strategies while managing their own fleets and pricing policies.
+
+\section{Preliminaries}
+\label{sec:preliminaries}
+\subsection{Reinforcement Learning and the A2C Algorithm}
+The problem of optimizing fleet management and pricing is cast as a sequential decision-making task. We formalize the environment as a Markov Decision Process (MDP) denoted by the tuple $\mathcal{M} = (\mathcal{S}, \mathcal{A}, \mathcal{P}, d_0, \mathcal{R}, \gamma)$. The state space $\mathcal{S}$ consists of states $\mathbf{s} \in \mathcal{S}$ that capture the global configuration of the transportation network. Similarly, $\mathcal{A}$ represents the set of feasible pricing and rebalancing actions $\mathbf{a} \in \mathcal{A}$. The system evolves according to the transition dynamics $P(\mathbf{s}_{t+1}|\mathbf{s}_t, \mathbf{a}_t)$, starting from an initial distribution $d_0(\mathbf{s}_0)$. At each step, the operator receives a scalar reward $r(\mathbf{s}_t, \mathbf{a}_t) \in \mathcal{R}$, with future rewards discounted by a factor $\gamma \in (0, 1]$.
+
+The operator acts according to a stochastic policy $\pi(\mathbf{a}_t|\mathbf{s}_t)$, which maps the current system configuration to a probability distribution over actions. This policy induces a distribution $p_\pi(\tau)$ over trajectories $\tau = (\mathbf{s}_0, \mathbf{a}_0, \dots, \mathbf{s}_H, \mathbf{a}_H)$. The optimization goal is to find a policy that maximizes the expected discounted return over the episode horizon $H$:
+
+\begin{equation}
+    J(\pi) = \mathbb{E}_{\tau \sim p_\pi(\tau)} \left[ \sum_{t=0}^H \gamma^t r(\mathbf{s}_t, \mathbf{a}_t) \right]
+\end{equation}
+
+To tackle the high-dimensional nature of the AMoD control problem, we employ the Advantage Actor-Critic (A2C) algorithm. This approach utilizes two distinct GCNs to approximate the value and policy functions, allowing the operator to leverage the topological structure of the transportation network.
+
+The critic network, parameterized by $\phi$, serves to reduce the variance of the learning process by estimating the state-value function $V_\phi(\mathbf{s}_t)$. This function represents the expected return from state $\mathbf{s}_t$ when following the current policy:
+
+\begin{equation}
+    V_\phi(\mathbf{s}_t) = \mathbb{E}_{\tau \sim p_{\pi}(\tau|\mathbf{s}_t)} \left[ \sum_{t'=t}^H \gamma^{t'-t} r(\mathbf{s}_{t'}, \mathbf{a}_{t'}) \right]
+\end{equation}
+
+During training, the critic parameters are updated to minimize the mean squared error between the estimated value $V_\phi(\mathbf{s}_t)$ and the actual realized return $R_t = \sum_{t'=t}^H \gamma^{t'-t} r(\mathbf{s}_{t'}, \mathbf{a}_{t'})$:
+
+\begin{equation}
+    L_{critic}(\phi) = \frac{1}{2} \left( R_t - V_\phi(\mathbf{s}_t) \right)^2
+\end{equation}
+
+The actor network, parameterized by $\theta$, defines the policy $\pi_\theta(\mathbf{a}_t|\mathbf{s}_t)$. It is optimized via gradient ascent on the objective $J(\pi_\theta)$. To compute the gradient, we utilize the advantage estimator $\hat{A}(\mathbf{s}_t, \mathbf{a}_t)$, which uses the critic's value estimate as a baseline $b(\mathbf{s}_t) = V_\phi(\mathbf{s}_t)$ to determine the relative quality of the chosen action:
+\begin{equation}
+    \hat{A}(\mathbf{s}_t, \mathbf{a}_t) = \sum_{t'=t}^H \gamma^{t'-t} r(\mathbf{s}_{t'}, \mathbf{a}_{t'}) - b(\mathbf{s}_t)
+\end{equation}
+The policy gradient is then estimated by averaging over the trajectory:
+\begin{equation}
+    \nabla_\theta J(\pi_\theta) = \mathbb{E}_{\tau \sim p_{\pi_\theta}(\tau)} \left[ \sum_{t=0}^H \gamma^t \nabla_\theta \log \pi_\theta(\mathbf{a}_t|\mathbf{s}_t) \hat{A}(\mathbf{s}_t, \mathbf{a}_t) \right]
+\end{equation}
+
+\subsection{Graph Convolutional Networks}
+Recent advances in deep learning have demonstrated strong performance in domains where data exhibit compositional and spatial structure. Convolutional neural networks (CNNs), originally introduced for visual pattern recognition, exploit local connectivity and parameter sharing to efficiently learn from grid-structured data \cite{lecun1998gradient}. However, many real-world systems, including urban transportation networks, are more naturally represented as graphs rather than regular grids. In such settings, the learning architecture must respect the fact that the indexing of nodes is arbitrary. In particular, if the nodes of a graph are relabeled, the output of the model should remain unchanged. This property, known as permutation invariance, is essential in transportation networks, where decisions should depend on spatial relationships and node attributes rather than on an imposed ordering of regions. GCNs address this challenge by extending the notion of convolution to non-Euclidean domains \cite{scarselli2009graph}. 
+
+Let the transportation system be modeled as a graph $\mathcal{G} = (\mathcal{V}, \mathcal{E})$, where $\mathcal{V} = \{v_i\}_{i=1}^{N}$ denotes the set of nodes corresponding to spatial regions or stations, and $\mathcal{E}$ denotes the set of edges encoding travel connectivity. Each node $v_i$ is associated with a feature vector $\mathbf{x}_i \in \mathbb{R}^D$, and the node features are collected in a matrix $\mathbf{X} \in \mathbb{R}^{N \times D}$. To learn a permutation-invariant representation of the network, we employ a GCN, whose layer-wise propagation rule is given by
+\begin{equation}
+\mathbf{H}^{(l+1)} = \sigma\!\left( \tilde{\mathbf{D}}^{-\frac{1}{2}} \tilde{\mathbf{A}} \tilde{\mathbf{D}}^{-\frac{1}{2}} \mathbf{H}^{(l)} \mathbf{W}^{(l)} \right),
+\end{equation}
+where $\tilde{\mathbf{A}} = \mathbf{A} + \mathbf{I}$ is the adjacency matrix with self-loops, $\tilde{\mathbf{D}}$ is the corresponding diagonal degree matrix, $\mathbf{W}^{(l)}$ is a trainable weight matrix, $\sigma(\cdot)$ is a nonlinear activation function, and $\mathbf{H}^{(0)} = \mathbf{X}$. This propagation mechanism aggregates information from neighboring nodes through a shared local filter, ensuring that the update of each node depends only on its local neighborhood and not on the ordering of nodes in $\mathcal{V}$. The resulting node embeddings capture spatial correlations such as demand imbalances and vehicle movements across regions and provide a compact, permutation-invariant state representation suitable for integration with reinforcement learning frameworks for vehicle rebalancing and dynamic pricing in city-scale mobility-on-demand systems \cite{kipf2017semi}.
+
+\section{Multi-Operator AMoD Control}
+\label{sec:AMOD Control}
+We represent the AMoD environment as a directed graph $\mathcal{G} = (\mathcal{V}, \mathcal{E})$, where the vertex set $\mathcal{V}$ corresponds to $N_v$ spatial regions, each centered around a designated station for pickups and drop-offs. The framework considers a dual-operator architecture, where the total fleet is partitioned into two distinct sets of $M_0$ and $M_1$ autonomous vehicles, each managed by its own independent operator. These operators act within a synchronized discrete time horizon $\mathcal{T} = \{1, \dots, T\}$ of interval length $\Delta T$. Movement between regions $i$ and $j$ follows the shortest path, requiring $\tau_{ij} \in \mathbb{Z}_+$ time steps and incurring a time-variant operational cost $c_{ij}^t$ for the respective fleet.
+
+The available supply at any station $i$ is defined by the local density of idle vehicles from each fleet, denoted as $m_{i,0}^t$ and $m_{i,1}^t$. On the demand side, potential passengers arrive at origin $i$ and evaluate the available service providers—including both AMoD operators and an alternative transportation mode—using a discrete choice model. Specifically, a utility value $U$ is calculated for each option as a function of the trip price, the passenger's salary, and the estimated travel time. These utilities are then mapped to a probability distribution, from which the passenger's final choice is sampled via a categorical distribution. Once a provider is selected, passengers enter a first-come, first-served (FCFS) queue. To reflect realistic behavior, we impose a maximum waiting threshold $\omega$; if the assigned 
+operator cannot provide a vehicle within this window, the passenger exits the system, representing a loss of potential demand.
+
+Based on this structural foundation, the subsequent sections formalize the interaction between the two operators. We first cast the pricing and rebalancing task as a Markov Decision Process (MDP) and then detail a GCN architecture designed to handle the spatial dependencies inherent in the dual-operator learning process.
+
+\subsection{Three-step Control Architecture}
+\label{sec:AMOD Control Min}
+In this paper, we study an explicitly dual-operator AMoD setting with two independent operators, each seeking to maximize its own profit while interacting with the same environment. The control architecture follows the bi-level formulation introduced in~\cite{9683135} but is adapted here to a competitive setting in which each operator controls its own fleet. The bi-level formulation consists of: a first level where the actor outputs the desired share of idle vehicles per region, and a second level where a minimal-cost rebalancing problem determines the number of vehicles to rebalance from and to each region to achieve the desired distribution. In the implementation, this bi-level approach induces a three-step control architecture, illustrated in Fig.~\ref{fig:dual_agent_flow}. 
+
+At each time step $t$, the policy first produces a joint control for each operator consisting of a node-based pricing decision and a node-based desired idle-vehicle distribution (first level). The node-level price scalars are transformed into OD-level prices by multiplying them with OD base prices estimated from historical data, yielding the OD fares used in the environment. These OD-based prices are then passed to the environment, where the stochastic choice model generates passenger requests and assigns them to one of the two operators via the underlying price-dependent choice model, resulting in operator-specific passenger streams. The generated passengers enter the queue at their corresponding departure region and wait to be served by vehicles of the chosen operator; service is restricted to vehicles located in the same region.
+
+In the second step, passengers wait subject to a maximum waiting time, assumed homogeneous across the system, and vehicles are matched to waiting passengers in a first-come, first-served manner. Following matching, the node-based desired distribution produced by each operator's policy is mapped to executable rebalancing actions by solving a minimal rebalancing-cost problem, constrained by the desired vehicle distribution (second level), which returns a set of rebalancing flows for each operator. The formulation of the minimal rebalancing-cost problem is presented in Appendix \ref{app: min_cost}. The rebalancing flows are executed separately for each operator, and the vehicle states and queues are updated accordingly. The system then transitions to the next time step, and the new state together with the per-operator rewards produced by the transition are returned to the two operators.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.90\textwidth]{Images/dual_agent_v2.png}
+  \caption{Three-step policy loop for dual-operator AMoD control. Step 1: operators formulate pricing and desired idle-vehicle distribution policies. Step 2: passenger assignment via choice model, queueing, and matching. Step 3: idle-vehicle rebalancing and update of vehicle positions and queues.}
+  \label{fig:dual_agent_flow}
+\end{figure*}
+
+\subsection{The AMoD Control Problem as an MDP}
+ \label{sec: AMOD_MDP}
+As discussed in Section~\ref{sec:preliminaries}, the control problem of an AMoD system can be formulated as a Markov Decision Process (MDP). In this section, we describe in detail the four fundamental components of the MDP: the state space $\mathcal{S}$, the action space $\mathcal{A}$, the system dynamics $\mathcal{P}$, and the reward function $\mathcal{R}$. We specify how each element is defined in the context of multi-operator AMoD control.
+
+\textit{State-space} ($\mathcal{S}$): The state encodes the complete information set that enables operators to compute prices and rebalancing flows. This includes information regarding the transportation network as well as region-level data on vehicle supply and ride demand. Specifically, at any given time $t \in \mathcal{T}$, the state $\mathbf{s}_{t,o}$ for a representative operator $o$ includes:
+\begin{itemize}
+    \item The network adjacency matrix $\mathbf{A}$.
+    \item The current number of the operator's own idle vehicles in each region, $m_{i,o}^t \in [0, M_o]$ for all $i \in \mathcal{V}$.
+    \item The number of vehicles en route to each region over a planning horizon $H_p$, denoted by $\{m_{i, o}^{t'}\}_{t' = \tau, \ldots, \tau + H_p}$.
+    \item The operator's own current prices, $p^t_{i,j,o}$ for all $i,j \in \mathcal{V}$.
+    \item The competitor's current prices, $p^t_{i,j,o'}$ for all $i,j \in \mathcal{V}$ (where $o' \neq o$).
+    \item The length of the operator's queue in each region, $q_{i, o}^t$ for all $i \in \mathcal{V}$.
+    \item The operator's own current demand at each region, $d_{i, o}^t$ for all $i \in \mathcal{V}$.
+\end{itemize}
+Notably, operators do not share demand or vehicle location data, but they are able to observe the competitor's current prices across all regions.
+
+\textit{Action-space} ($\mathcal{A}$): As shown in Fig.~\ref{fig:dual_agent_flow}, we consider an AMoD control problem that involves joint rebalancing of vehicles and trip pricing. An action from operator $o$ specifies both a ride origin price scalar $p_{i,o}^t \in (0, 1]$ and the desired share of idle vehicles for each region, defined as $w_{i,o}^t \in [0, 1]$ per region $i$, bounded by the constraint $\sum_{i=1}^{N_v} w_{i,o}^t = 1$, where $N_v$ is the total number of regions in the graph. It is this desired distribution of idle vehicles that is later used to solve a minimum-cost rebalancing problem to arrive at the specific vehicle flow.
+
+We adopt an origin-based price scaling approach for two principal reasons. First, empirical evidence from both our experimental results (Appendix~\ref{app:odori}) and prior work in single-operator settings~\cite{11063454} demonstrates that origin-based scaling achieves comparable performance to origin-destination (OD)-based scaling. Second, the origin-based approach substantially reduces the dimensionality of the action space, thereby enhancing the scalability of the proposed framework. The joint action at time $t$ by operator $o$ is given by $\mathbf{a}_{t,o} = [\mathbf{w}_{t,o}, \mathbf{p}_{t,o}]$, where $\mathbf{w}_{t,o} = [w_{1,o}^t, \dots, w_{N_v, o}^t]$ and $\mathbf{p}_{t,o} = [p_{1,o}^t, \dots, p_{N_v, o}^t]$. The origin price scalar is used to specify the trip price for operator $o$ from region $i$ to $j$ via
+\begin{equation} \label{price_eq}
+    p_{i,j,o}^t = \beta \cdot p_{i,o}^t \cdot \overline{p}_{i,j}^t,
+\end{equation}
+where $\overline{p}_{i,j}^t$ is a historical reference price shared by both operators, and $\beta$ is an upper bound on the price level. In our experiments, we set $\beta = 2$, effectively resulting in $p_{i,j,o}^t \in (0, 2\overline{p}_{i,j}^t]$. The vector $\mathbf{w}_{t,o}$ is used to specify the minimal rebalancing-cost problem solved to determine vehicle movement between regions, as described in Section~\ref{sec:AMOD Control Min}.
+
+\textit{Reward} ($\mathcal{R}$): The reward is defined from the perspective of each operator separately, whose objective is to maximize its own profits. Consequently, operators act in their own best interest without regard for the competitor's performance. The reward for operator $o$ is defined as the revenue earned from trips minus the cost of operations:
+\begin{equation}
+    r_{o} = \sum_{i,j \in \mathcal{V}} x_{i,j,o}^t (p_{i,j,o}^t - c_{i,j,o}^t) - \sum_{(i,j) \in \mathcal{E}} y_{i,j,o}^t c_{i,j,o}^t,
+\end{equation}
+where $x_{i,j,o}^t$ denotes the number of passengers served at time $t$ from region $i$ to $j$, $y_{i,j,o}^t$ denotes the number of vehicles rebalanced at time $t$ from region $i$ to $j$, and $c_{i,j,o}^t$ denotes the cost of moving a vehicle (with or without a passenger) between these regions.
+
+\textit{Dynamics} ($\mathcal{P}$):
+The system dynamics $\mathcal{P}$ characterize the evolution of the state space in response to the joint pricing and rebalancing actions of the operators. This transition process is driven by the stochastic nature of passenger demand, the update logic of regional queue lengths, and the conservation of vehicle availability across the network. The network adjacency matrix, while included in the state representation, remains exogenous to the operators' actions and is therefore treated as a static component of the dynamics.  
+
+\subsubsection*{Demand Generation and Mode Choice}
+The passenger demand process is grounded in historical data to ensure realistic simulation behavior. For each OD pair $(i,j)$ and time $t$, a reference demand $\bar{d}_{ij}^t$ and reference price $\bar{p}_{ij}^t$ are sampled. To model a competitive market, we define a potential demand pool by scaling the reference demand to $2\bar{d}_{ij}^t$. Each potential passenger $k$ chooses between operator 1, operator 2, or an outside option (rejecting both), modeled via a Multinomial Logit (MNL) framework. 
+
+The utility of passenger $k$ at time $t$ for a trip offered by operator $o$ on OD pair $(i,j)$ depends on travel time, the passenger's wage, and the trip price:
+\begin{equation}\label{trip_utility}
+    U^t_{k,i,j,o} = \beta_0 - \beta_t \cdot w_k \cdot \tau^t_{i,j} - \frac{\bar{w}}{w_k} p^t_{i,j,o},
+\end{equation}
+where $\beta_0$ represents a baseline preference parameter, $\beta_t$ captures the marginal disutility of travel time, $w_k$ denotes the passenger's hourly wage, and $\bar{w}$ is the average hourly wage across all passengers in the scenario. The variables $\tau^t_{i,j}$ and $p^t_{i,j,o}$ represent the travel time and price charged by operator $o$, respectively. We set $\beta_t = 0.71$, which corresponds to a 29\% undervaluation of time relative to direct monetary cost. This parameterization is consistent with findings from other studies in the literature \cite{khulbe2023probabilistic}. The price term is scaled by $\frac{\bar{w}}{w_k}$ to capture income effects, such that a given price has a relatively larger impact on lower-wage passengers and a smaller impact on higher-wage passengers. The utility of the outside option is normalized to zero: $U^t_{k,i,j,\emptyset} = 0$.
+
+Passenger wage data and average wages are derived from income data from the US Census Bureau \cite{uscensus_s1901_2013, uscensus_s1902_2013, uscensus_s1901_2019, uscensus_s1902_2019, uscensus_s1901_2011, uscensus_s1902_2011}. For the San Francisco scenario, wage values are adjusted using the national US inflation rate from 2008 to 2011 to obtain 2008-equivalent estimates from 2011 data, that is the closest data point available. Travel times between regions are based on historical averages from taxi trip data \cite{gammelli2022graphmetareinforcementlearningtransferable, illinoisdatabankIDB-9610843}.
+
+The probability that passenger $k$ selects operator $o$ is given by
+\begin{equation}
+    P_{k,i,j,o}^t = \frac{e^{U^t_{k,i,j,o}}}{e^{U^t_{k,i,j,\emptyset}} +\sum_{o' \in \{0,1\}} e^{U^t_{k,i,j,o'}}}.
+\end{equation}
+Individual choices are simulated by drawing from a categorical distribution over the set of options $\{0, 1, \emptyset\}$ based on the calculated probabilities.
+
+\subsubsection*{Queue Dynamics}
+The queue state for operator $o$ in region $i$ is updated according to the following flow conservation equation:
+\begin{equation}
+    q_{i, o}^{t} = q_{i, o}^{t-1} + \sum_{j \in \mathcal{V} \setminus \{i\}} (d_{i,j,o}^{t} -  x^t_{i,j,o}).
+\end{equation}
+Here, the current queue length $q_{i, o}^{t}$ is determined by the previous state $q_{i, o}^{t-1}$, incremented by the volume of new passenger arrivals $
+\sum_{j \in \mathcal{V} \setminus \{i\}} d_{i,j,o}^{t}
+$, and decremented by the number of successful vehicle and passenger matches $\sum_{j \in \mathcal{V} \setminus \{i\}} x^t_{i,j,o}$ performed by operator $o$.
+
+\subsubsection*{Vehicle Dynamics}
+In the context of autonomous vehicle control, we assume full compliance with system directives. Unlike human drivers, who may reject matched trips based on pricing or personal preference, autonomous vehicles strictly adhere to the controller's dispatch and rebalancing decisions. Consequently, the available number of idle autonomous vehicles for operator $o \in \{0, 1\}$ in region $i$ at time $t$ is updated according to the following conservation law:
+
+\begin{equation}
+    m_{i, o}^t = m_{i, o}^{t-1} + \sum_{j \in \mathcal{V} \setminus \{i\}} v_{j, i, o}^{\text{arr}, t} - \sum_{j \in \mathcal{V} \setminus \{i\}} \left( x_{i,j, o}^{t-1} + y_{i,j, o}^{t-1} \right).
+\end{equation}
+
+In this formulation, the current vehicle availability $m_{i, o}^t$ is determined by the idle pool from the previous time step $m_{i, o}^{t-1}$, incremented by the total number of incoming vehicles $v_{j, i, o}^{\text{arr}, t}$ arriving at region $i$ from all other regions $j \in \mathcal{V}$ at time $t$. This arrival term accounts for vehicles completing both passenger trips and rebalancing maneuvers initiated in previous intervals. The availability is then decremented by the total outflow of vehicles that departed region $i$ at time $t-1$, which includes both vehicles matched with passengers $x_{i,j, o}^{t-1}$ and those dispatched for rebalancing $y_{i,j, o}^{t-1}$ to other regions.
+
+\subsection{The Model Architecture}
+\label{sec:Arch}
+We model the two competing fleet operators as independent, indexed by $o$, each equipped with its own parameterized policy (actor) and value function (critic). The policy of operator $o$ is represented by a neural network $\pi_{\theta_o}(\cdot \mid \mathbf{s}_t)$ with parameters $\theta_o$, while the corresponding value function is approximated by a neural network $V_{\phi_o}(\mathbf{s}_t)$ with parameters $\phi_o$. The neural architecture for both $\pi_{\theta_o}$ and $V_{\phi_o}$ is grounded in the Graph Convolutional Network (GCN) reinforcement learning framework proposed by~\cite{9683135} and~\cite{11063454}. Both networks consist of a GCN layer followed by three fully connected (FC) layers. The input to both networks is the state representation $s_t$, which was presented in Section \ref{sec: AMOD_MDP}. A schematic illustration of the architecture is shown in Figure~\ref{fig:architecture}.
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.90\textwidth]{Images/Model Arch.png}
+  \caption{The Actor-Critic architecture employed by the operators. Each operator maintains independent actor and critic networks.}
+  \label{fig:architecture}
+\end{figure*}
+
+\textit{Critic Architecture:}
+The value function is approximated by the parameterized critic network $V_{\phi_o}(\mathbf{s}_t)$. Given the input state $\mathbf{s}_t$, node-level features are first encoded using a GCN layer with ReLU activation. A residual connection is applied by adding the encoded features to the original node states. The resulting node embeddings are then passed through two FC layers with hidden size $h$ and ReLU activations. To estimate the operator-specific global value function, the node-level representations are aggregated via a global summation operator across all regions, yielding a system-level embedding. This embedding is then mapped through a final FC layer to produce a scalar value $V_{\phi_o}(\mathbf{s}_t)$.
+
+\textit{Actor Architecture:}
+The policy network $\pi_{\theta_o}(\cdot \mid \mathbf{s}_t)$ follows the same initial encoding procedure as the critic. The input state $\mathbf{s}_t$ is first processed by a GCN layer with a residual connection. The resulting node embeddings are then passed through two FC layers with hidden size $h$ and LeakyReLU activations. The output layer of $\pi_{\theta_o}$ depends on the control mode. For joint pricing and rebalancing, the final FC layer outputs three values per region, which are transformed via a Softplus activation to ensure strictly positive parameters. The first two outputs per region, $\alpha_i^t$ and $\beta_i^t$, parameterize a Beta distribution at time step $t$:
+\[
+p^t_{i,o} \sim \text{Beta}(\alpha_i, \beta_i),
+\]
+from which the origin-based price scalar for region $i$, at time $t$ for operator $o$ is sampled. The third output forms a concentration vector $\mathbf{\gamma}^t \in \mathbb{R}^{N_v}$ that parameterize a Dirichlet distribution
+\[
+\mathbf{w}^t_o \sim \text{Dirichlet}(\mathbf{\gamma}^t),
+\]
+from which the desired fraction of idle vehicles that should be rebalanced to each region at time $t$ for operator $o$ is sampled. For pricing-only control, $\pi_{\theta_o}$ outputs only the Beta distribution parameters, while for rebalancing-only control, it outputs only the Dirichlet concentration parameters.
+
+\section{Experiments}
+\label{sec:Experiments}
+
+This section presents an empirical evaluation of the proposed framework. The experiments are organized along three dimensions. First, we evaluate the framework across three urban environments—San Francisco, Washington DC, and Southern Manhattan—comparing single-operator monopolistic control against competitive dual-operator scenarios under different control modes (rebalancing only, pricing only, and joint control). Second, we conduct a detailed analysis of the learned competitive policies in the Southern Manhattan environment, including the effect of information asymmetry on strategic behavior. Third, we perform sensitivity analyses examining the influence of fleet size, asymmetric fleet distributions, and regional wage heterogeneity on equilibrium outcomes.
+
+\subsection{Experimental Setup and Simulation Environment}
+All experiments are conducted within a discrete-time simulation environment, utilizing an adapted version of the simulator proposed by \cite{gammelli2022graphmetareinforcementlearningtransferable}. The simulation horizon spans the peak evening period from 19:00 to 20:00, discretized into 20 time steps of 3 minutes each. Passenger demand prior to the choice model is generated using a Poisson distribution derived from real-world historical taxi trip data. The operators are trained using the A2C algorithm with the GCN-based architecture detailed in Section~\ref{sec:Arch}. Each model is trained to convergence and evaluated over 10 test runs; we report averages and standard deviations throughout.
+
+\subsection{Multi-City Performance Analysis}
+\label{sec:exp_multicity}
+
+To evaluate the robustness of the framework, we conduct experiments across three urban environments with distinct characteristics. Table~\ref{tab:scenarios} summarizes the key properties of each scenario. San Francisco features a compact 10-node network with 374 vehicles and the highest spatial demand variability (CV=1.31). Washington DC represents a larger network (18 nodes, 1,096 vehicles) with comparable variability (CV=1.26). NYC Manhattan South operates at the highest absolute demand level (21,270 requests) but with substantially lower spatial variability (CV=0.69), indicating more balanced demand patterns.
+
+\begin{table}[h]
+\centering
+\caption{Characteristics of the scenarios used in comparative analysis. For the benchmark gaps, the first column corresponds to the reward gap and the second column corresponds to the served passenger number gap. A positive number indicates that the equal-distribution benchmark has a higher value compared to the no-control benchmark.}
+\label{tab:scenarios}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{c c c c c c c c c}
+\toprule
+City & Date & Hourly Wage & Nodes & Veh. & Demand & Reward Gap & Served Gap & CV \\
+\midrule
+San Francisco & 2008-06-06 & \$17.76 & 10 & 374 & 5490 & 46.74\% & 62.96\% & 1.31 \\
+Washington DC & 2019-03-12 & \$25.26 & 18 & 1096 & 16881 & 15.06\% & 48.14\% & 1.26 \\
+NYC Man. South & 2013-03-08 & \$22.77 & 12 & 650 & 21270 & 10.00\% & 20.83\% & 0.69 \\
+\bottomrule
+\multicolumn{9}{l}{\footnotesize \textit{Note:} Veh.: No. Vehicles; CV: Coefficient of Variation of Demand; All data from 19:00--20:00.}
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Single-Operator Monopolistic Performance}
+
+Table~\ref{tab:policy_performance} presents total rewards for different control strategies in the single-operator setting. The joint pricing and rebalancing policy outperforms all baselines and single-mode policies across all three cities. In San Francisco, joint control achieves a reward of 12,447.47, a 23.0\% improvement over rebalancing alone and a 43.5\% improvement over pricing alone. The magnitude of this improvement decreases in cities with lower demand variability: in Washington DC the gain over rebalancing is 2.9\%, and in NYC Manhattan South it is 1.0\%. This pattern suggests that in environments with more spatially balanced demand, rebalancing alone can achieve near-optimal performance, and the incremental value of dynamic pricing diminishes.
+
+\begin{table}[h]
+\centering
+\caption{Performance of the training policies in the three scenarios. We perform 10 tests for each policy and report the average performance with standard deviations in parentheses. Bold indicates the best-performing policies. ``NC'': No Control, ``UD'': Uniform Distribution, ``Reb.'': Rebalancing, ``Joint'': joint Pricing and Rebalancing.}
+\label{tab:policy_performance}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l c c c c c}
+\toprule
+City & NC & UD & Reb. & Pricing & Joint \\
+\midrule
+San Francisco & \makecell{6345.49 \\ \footnotesize (251.60)} & \makecell{9444.98 \\ \footnotesize (318.89)} & \makecell{10116.42 \\ \footnotesize (362.19)} & \makecell{8675.68 \\ \footnotesize (130.66)} & \makecell{\textbf{12447.47} \\ \footnotesize \textbf{(159.63)}} \\[0.5em]
+Washington DC & \makecell{13153.97 \\ \footnotesize (324.58)} & \makecell{15612.59 \\ \footnotesize (383.28)} & \makecell{16099.46 \\ \footnotesize (364.72)} & \makecell{14118.33 \\ \footnotesize (313.26)} & \makecell{\textbf{16574.46} \\ \footnotesize \textbf{(334.12)}} \\[0.5em]
+NYC Man. South & \makecell{16283.02 \\ \footnotesize (487.67)} & \makecell{18224.77 \\ \footnotesize (260.39)} & \makecell{18470.56 \\ \footnotesize (304.30)} & \makecell{18290.21 \\ \footnotesize (391.38)} & \makecell{\textbf{18662.76} \\ \footnotesize \textbf{(289.01)}} \\[0.5em]
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Table~\ref{tab:performance_metrics} provides detailed operational metrics. The learned price scalars vary with demand characteristics: in San Francisco, the joint policy sets prices below historical reference levels (scalar 0.86), while in Washington DC and NYC Manhattan South, prices are near or above reference levels (1.08 and 1.01, respectively). Joint control also achieves lower rebalancing costs than rebalancing-only policies across all cities (e.g., 667.80 vs. 919.98 in San Francisco), indicating that pricing can partially substitute for costly vehicle repositioning by shaping demand patterns directly.
+
+The service quality metrics illustrate trade-offs across strategies. In San Francisco, rebalancing alone achieves the lowest waiting times (0.26 minutes) but serves fewer passengers (971.50). Joint control accepts moderately higher waiting times (0.51 minutes) while increasing served demand to 1,308.90, a 34.7\% increase. In Washington DC, joint control achieves both the lowest waiting times (0.19 minutes) and high served demand (3,748.70), suggesting that in larger networks, the framework can simultaneously improve service quality and demand capture. In NYC Manhattan South, high baseline queue lengths indicate capacity constraints that limit the scope for further operational improvement.
+
+\begin{table*}[ht]
+\centering
+\caption{Performance metrics of the three policies in San Francisco, Washington DC, and NYC Manhattan South. The numbers in parentheses indicate the standard deviations of each metric for 10 test runs. ``Price'' is the average price scalar set by the operator, and ``Wait/mins'' is the waiting time of the served passengers in minutes. Bold indicates the best-performing policies. ``Reb.'': Rebalancing, ``Pricing'': Pricing policy, ``Joint'': joint Pricing and Rebalancing. All values are averaged across all regions.}
+\label{tab:performance_metrics}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{San Francisco} & \multicolumn{3}{c}{Washington DC} & \multicolumn{3}{c}{NYC Man. South} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+Policy & Reb. & Pricing & Joint & Reb. & Pricing & Joint & Reb. & Pricing & Joint \\
+\midrule
+Reward & \makecell{10116.42 \\ \footnotesize (362.19)} & \makecell{8675.68 \\ \footnotesize (130.66)} & \makecell{\textbf{12447.47} \\ \footnotesize \textbf{(159.63)}} & \makecell{16099.46 \\ \footnotesize (364.72)} & \makecell{14118.33 \\ \footnotesize (313.26)} & \makecell{\textbf{16574.46} \\ \footnotesize \textbf{(334.12)}} & \makecell{18470.56 \\ \footnotesize (304.30)} & \makecell{18290.21 \\ \footnotesize (391.38)} & \makecell{\textbf{18662.76} \\ \footnotesize \textbf{(289.01)}} \\[0.5em]
+\cmidrule(lr){1-10}
+Rebalancing Costs & \makecell{919.98 \\ \footnotesize (29.11)} & \makecell{---} & \makecell{667.80 \\ \footnotesize (21.06)} & \makecell{3706.65 \\ \footnotesize (150.48)} & \makecell{---} & \makecell{3520.65 \\ \footnotesize (58.42)} & \makecell{1394.40 \\ \footnotesize (95.83)} & \makecell{---} & \makecell{1539.90 \\ \footnotesize (102.35)} \\[0.5em]
+\cmidrule(lr){1-10}
+Rebalance Trips & \makecell{539.80 \\ \footnotesize (16.04)} & \makecell{---} & \makecell{393.10 \\ \footnotesize (14.51)} & \makecell{1134.70 \\ \footnotesize (34.26)} & \makecell{---} & \makecell{1177.80 \\ \footnotesize (28.40)} & \makecell{290.00 \\ \footnotesize (21.34)} & \makecell{---} & \makecell{321.30 \\ \footnotesize (21.63)} \\[0.5em]
+\cmidrule(lr){1-10}
+Price & \makecell{---} & \makecell{0.75 \\ \footnotesize (0.00)} & \makecell{0.86 \\ \footnotesize (0.00)} & \makecell{---} & \makecell{1.17 \\ \footnotesize (0.00)} & \makecell{1.08 \\ \footnotesize (0.00)} & \makecell{---} & \makecell{1.05 \\ \footnotesize (0.00)} & \makecell{1.01 \\ \footnotesize (0.00)} \\[0.5em]
+\cmidrule(lr){1-10}
+Wait/mins & \makecell{0.26 \\ \footnotesize (0.05)} & \makecell{0.52 \\ \footnotesize (0.03)} & \makecell{0.51 \\ \footnotesize (0.04)} & \makecell{0.32 \\ \footnotesize (0.03)} & \makecell{0.45 \\ \footnotesize (0.03)} & \makecell{0.19 \\ \footnotesize (0.02)} & \makecell{0.64 \\ \footnotesize (0.02)} & \makecell{0.40 \\ \footnotesize (0.03)} & \makecell{0.58 \\ \footnotesize (0.03)} \\[0.5em]
+\cmidrule(lr){1-10}
+Queue & \makecell{1.86 \\ \footnotesize (0.36)} & \makecell{4.60 \\ \footnotesize (0.23)} & \makecell{5.45 \\ \footnotesize (0.37)} & \makecell{5.20 \\ \footnotesize (0.49)} & \makecell{5.18 \\ \footnotesize (0.32)} & \makecell{2.49 \\ \footnotesize (0.27)} & \makecell{14.20 \\ \footnotesize (0.49)} & \makecell{6.95 \\ \footnotesize (0.39)} & \makecell{12.52 \\ \footnotesize (0.67)} \\[0.5em]
+\cmidrule(lr){1-10}
+Served Demand & \makecell{971.50 \\ \footnotesize (32.22)} & \makecell{823.60 \\ \footnotesize (10.97)} & \makecell{1308.90 \\ \footnotesize (16.82)} & \makecell{4254.20 \\ \footnotesize (52.47)} & \makecell{2393.40 \\ \footnotesize (51.26)} & \makecell{3748.70 \\ \footnotesize (58.21)} & \makecell{3557.70 \\ \footnotesize (36.60)} & \makecell{2971.10 \\ \footnotesize (60.43)} & \makecell{3557.50 \\ \footnotesize (35.31)} \\[0.5em]
+\cmidrule(lr){1-10}
+Total Demand & \makecell{1092.10 \\ \footnotesize (42.86)} & \makecell{1319.00 \\ \footnotesize (34.71)} & \makecell{1736.90 \\ \footnotesize (33.86)} & \makecell{4753.00 \\ \footnotesize (76.79)} & \makecell{3174.00 \\ \footnotesize (46.58)} & \makecell{3919.90 \\ \footnotesize (71.49)} & \makecell{4705.70 \\ \footnotesize (73.36)} & \makecell{3452.70 \\ \footnotesize (60.75)} & \makecell{4511.70 \\ \footnotesize (76.97)} \\[0.5em]
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+\subsubsection{Dual-Operator Competitive Performance}
+
+Table~\ref{tab:dual_agent_results} presents total rewards for the dual-operator setting. Unlike the single-operator case, no single control mode dominates across all cities. In San Francisco, rebalancing-only achieves the highest total reward (10,294.4), followed closely by joint control (10,205.1). Washington DC similarly favors rebalancing (15,743.2). This is intuitive, as in the rebalancing-only control mode, the operators do not compete on pricing. In NYC Manhattan South, however, pricing-only control achieves the highest total reward (18,879.6), surpassing both rebalancing and joint control. This variation reflects differences in the competitive landscape: in high-variability environments, fleet positioning is the primary competitive lever, whereas in stable, high-density environments, pricing becomes more central for market share competition.
+
+\begin{table}[h]
+\centering
+\caption{Total reward comparison across control strategies in the dual-operator setup. We perform 10 tests for each policy and report the average performance with standard deviations in parentheses. Bold indicates the best-performing policies. ``NC'': No Control, ``UD'': Uniform Distribution, ``Reb.'': Rebalancing, ``Joint'': joint Pricing and Rebalancing.}
+\label{tab:dual_agent_results}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{l c c c c c}
+\toprule
+City & NC & UD & Reb. & Pricing & Joint \\
+\midrule
+San Francisco & \makecell{6391.2 \\ \footnotesize (232.4)} & \makecell{9371.4 \\ \footnotesize (247.1)} & \makecell{\textbf{10294.4} \\ \footnotesize \textbf{(251.5)}} & \makecell{9277.4 \\ \footnotesize (163.3)} & \makecell{10205.1 \\ \footnotesize (180.3)} \\[0.5em]
+Washington DC & \makecell{13172.3 \\ \footnotesize (344.6)} & \makecell{15155.7 \\ \footnotesize (375.8)} & \makecell{\textbf{15743.2} \\ \footnotesize \textbf{(340.6)}} & \makecell{14093.3 \\ \footnotesize (263.8)} & \makecell{15669.3 \\ \footnotesize (356.5)} \\[0.5em]
+NYC Man. South & \makecell{16048.4 \\ \footnotesize (416.6)} & \makecell{17652.8 \\ \footnotesize (256.3)} & \makecell{18174.2 \\ \footnotesize (326.2)} & \makecell{\textbf{18879.6} \\ \footnotesize \textbf{(328.2)}} & \makecell{17685.7 \\ \footnotesize (270.9)} \\[0.5em]
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Table~\ref{tab:performance_metrics_dual} provides detailed metrics for the dual-operator setting. Several patterns are worth highlighting. First, competition drives prices downward relative to the monopolistic case. In San Francisco, both operators converge to a price scalar of 0.67 under joint control, compared to 0.86 in the monopolistic setting. In NYC Manhattan South, the reduction is more modest (0.97 vs. 1.01), consistent with a less supply-constrained environment. Second, waiting times generally increase in the dual-operator setting, reflecting the inefficiency of fragmented fleet management. In San Francisco, waiting times under dual-operator joint control rise to 1.35 and 1.19 minutes for the two operators, compared to 0.51 minutes under the monopolist.
+
+Third, reward splits between operators are approximately balanced across all scenarios, with typical differences under 5\%. This suggests that the learning dynamics converge to approximate Nash equilibria where neither operator can substantially improve by deviating unilaterally.
+
+\begin{table*}[ht]
+\centering
+\scriptsize
+\caption{Performance metrics of the three policies in San Francisco, Washington DC, and NYC Manhattan South for dual-operator setup. The numbers in parentheses indicate the standard deviations of each metric for 10 test runs. ``Price'' is the average price scalar set by each operator, and ``Wait/mins'' is the waiting time of the served passengers in minutes. ``Reb.'': Rebalancing, ``Pricing'': Pricing policy, ``Joint'': joint Pricing and Rebalancing. All values are averaged across all regions.}
+\label{tab:performance_metrics_dual}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{l ccc ccc ccc}
+\toprule
+& \multicolumn{3}{c}{San Francisco} & \multicolumn{3}{c}{Washington DC} & \multicolumn{3}{c}{NYC Man. South} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7} \cmidrule(lr){8-10}
+Policy & Reb. & Pricing & Joint & Reb. & Pricing & Joint & Reb. & Pricing & Joint \\
+\midrule
+Total Reward & \textbf{10294.4 (251.5)} & 9277.4 (163.3) & 10205.1 (180.3) & \textbf{15743.2 (340.6)} & 14093.3 (263.8) & 15669.3 (356.5) & 18174.2 (326.2) & \textbf{18879.6 (328.2)} & 17685.7 (270.9) \\
+Reward Operator 0 & 5051.2 (182.6) & 4684.0 (88.4) & 5027.4 (121.7) & 7850.0 (240.4) & 6961.0 (185.0) & 7598.7 (263.7) & 9029.4 (228.1) & 9489.0 (183.1) & 8815.3 (221.2) \\
+Reward Operator 1 & 5243.2 (182.6) & 4593.3 (113.3) & 5177.7 (137.0) & 7893.2 (138.9) & 7132.4 (272.6) & 8070.6 (165.4) & 9144.9 (295.8) & 9390.6 (195.1) & 8870.4 (242.2) \\
+\cmidrule(lr){1-10}
+Total Rebalancing Costs & 1040.9 (19.7) & --- & 571.2 (20.0) & 4018.7 (121.4) & --- & 4105.2 (149.9) & 1549.3 (113.2) & --- & 1379.7 (97.0) \\
+Rebalancing Costs Operator 0 & 495.4 (19.8) & --- & 293.3 (5.7) & 2022.2 (72.6) & --- & 2122.1 (88.5) & 821.7 (83.2) & --- & 708.8 (81.1) \\
+Rebalancing Costs Operator 1 & 545.5 (24.6) & --- & 277.9 (17.8) & 1996.5 (98.3) & --- & 1983.2 (98.5) & 727.6 (100.3) & --- & 671.0 (71.2) \\
+\cmidrule(lr){1-10}
+Total Rebalance Trips & 616.7 (9.5) & --- & 333.2 (14.5) & 1202.9 (46.2) & --- & 1238.0 (43.5) & 329.6 (22.2) & --- & 286.2 (22.3) \\
+Rebalance Trips Operator 0 & 292.4 (10.0) & --- & 172.3 (3.4) & 600.5 (37.4) & --- & 655.4 (32.8) & 175.5 (20.7) & --- & 148.2 (19.2) \\
+Rebalance Trips Operator 1 & 324.3 (12.0) & --- & 160.9 (13.2) & 602.4 (14.0) & --- & 582.6 (18.1) & 154.1 (22.1) & --- & 138.0 (15.8) \\
+\cmidrule(lr){1-10}
+Total Served Demand & 995.2 (23.0) & 892.3 (14.5) & 1385.9 (17.8) & 4242.8 (51.1) & 2387.8 (43.2) & 4155.3 (51.6) & 3532.8 (38.6) & 3463.8 (43.4) & 3572.5 (31.1) \\
+Served Demand Operator 0 & 486.4 (16.3) & 452.0 (10.1) & 684.6 (11.7) & 2119.1 (39.1) & 1177.4 (29.2) & 2022.1 (41.5) & 1760.9 (26.2) & 1753.4 (21.8) & 1781.1 (23.0) \\
+Served Demand Operator 1 & 508.8 (16.0) & 440.3 (8.6) & 701.3 (12.7) & 2123.7 (16.2) & 1210.4 (44.6) & 2133.2 (20.1) & 1771.9 (35.0) & 1710.4 (26.6) & 1791.4 (28.4) \\
+\cmidrule(lr){1-10}
+Price Operator 0 & --- & 0.73 (0.00) & 0.67 (0.00) & --- & 1.16 (0.00) & 1.02 (0.00) & --- & 0.93 (0.01) & 0.97 (0.00) \\
+Price Operator 1 & --- & 0.71 (0.00) & 0.67 (0.00) & --- & 1.16 (0.00) & 1.01 (0.00) & --- & 0.93 (0.01) & 0.97 (0.00) \\
+\cmidrule(lr){1-10}
+Wait/mins Operator 0 & 0.52 (0.12) & 0.97 (0.06) & 1.35 (0.08) & 0.84 (0.10) & 0.74 (0.10) & 0.71 (0.08) & 1.29 (0.08) & 1.09 (0.06) & 1.43 (0.07) \\
+Wait/mins Operator 1 & 0.36 (0.10) & 0.82 (0.07) & 1.19 (0.09) & 0.79 (0.09) & 0.76 (0.07) & 0.85 (0.12) & 1.31 (0.06) & 1.02 (0.05) & 1.45 (0.08) \\
+\cmidrule(lr){1-10}
+Queue Operator 0 & 2.24 (0.62) & 3.31 (0.77) & 4.58 (0.80) & 2.12 (0.70) & 3.07 (0.56) & 1.44 (0.60) & 8.17 (0.92) & 5.14 (0.72) & 10.3 (1.3) \\
+Queue Operator 1 & 2.10 (1.20) & 3.36 (0.53) & 3.98 (0.60) & 1.82 (0.47) & 3.17 (0.46) & 2.16 (0.66) & 7.73 (1.19) & 4.54 (0.69) & 9.98 (1.24) \\
+\cmidrule(lr){1-10}
+Total Demand & 1112.5 (43.3) & 1413.5 (34.1) & 2169.2 (40.8) & 4746.9 (76.8) & 3180.9 (47.2) & 4629.0 (72.1) & 4683.0 (73.9) & 4425.4 (60.9) & 5151.0 (61.4) \\
+Demand Operator 0 & 551.9 (20.2) & 731.0 (18.4) & 1118.8 (30.5) & 2379.4 (54.5) & 1555.5 (38.0) & 2210.6 (50.8) & 2336.2 (56.0) & 2278.4 (39.7) & 2568.0 (60.4) \\
+Demand Operator 1 & 560.6 (30.9) & 682.5 (19.3) & 1050.4 (23.5) & 2367.5 (36.6) & 1625.4 (29.4) & 2418.4 (37.9) & 2346.8 (39.4) & 2147.0 (29.9) & 2583.0 (40.0) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+\subsubsection{Monopolistic vs. Competitive Comparison}
+
+Comparing the best-performing policies across market structures reveals profit losses induced by competition. In San Francisco, the monopolistic joint control achieves 12,447.47 while the best dual-operator configuration yields 10,294.4, a 17.3\% reduction. Washington DC shows a 5.0\% reduction. NYC Manhattan South presents an exception: the dual-operator pricing strategy achieves 18,879.6, slightly above the monopolistic joint control (18,662.76). This may reflect the fact that competitive pricing pressure stimulates additional demand in this high-density, low-variability environment, though the difference (1.2\%) is modest relative to the standard deviations observed.
+
+The magnitude of competition-induced profit losses appears related to demand variability. High-CV environments suffer larger losses under competition, as fragmented fleet management amplifies the difficulty of matching supply to volatile demand. In the low-CV NYC environment, the primary competitive dimension shifts from rebalancing efficiency to price-based market share competition, where fragmentation is less costly.
+
+Across all dual-operator experiments, the training dynamics consistently converge to stable outcomes where neither operator exhibits sustained unilateral improvement, suggesting convergence to approximate Nash equilibrium. This pattern is visible in the training reward curves presented in Figure~\ref{fig:convergence_info_sharing}, where both operators' rewards stabilize after sufficient training, and is further supported by the comparison between origin-based and origin-destination pricing in Appendix~\ref{app:odori}, where alternative pricing formulations also converge to stable competitive outcomes.
+
+\subsection{Competitive Policy Analysis in Southern Manhattan}
+\label{sec:exp_policy_analysis}
+
+We now examine the learned policies in the NYC Manhattan South environment, where, as shown in Table~\ref{tab:dual_agent_results}, the pricing-only policy achieved the highest total reward (18,879.6), followed by rebalancing-only (18,174.2) and joint control (17,685.7). This ordering motivates a closer examination of how different control constraints shape competitive behavior.
+
+\subsubsection{Pricing Policy}
+
+Without direct rebalancing capability, operators must rely on price adjustments to influence both revenue and vehicle distribution. Figure~\ref{fig:pricing_mode1_initial} shows the initial pricing strategies at timestep $t=0$. Both operators employ substantial spatial price discrimination, with scalars ranging from 0.21 to 0.95. The lowest prices are concentrated in southern peripheral regions with low demand. This pattern reflects the dual role of pricing: low prices in the south stimulate trips that relocate vehicles toward high-demand northern regions, while higher prices in the northwest generate revenue and moderate demand in areas where vehicles are scarce.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/price_time_step0_mode1.png}
+\caption{Initial pricing policies at timestep $t=0$ for the pricing-only policy.}
+\label{fig:pricing_mode1_initial}
+\end{figure*}
+
+Figure~\ref{fig:pricing_mode1_average} shows time-averaged pricing strategies. Average scalars range from 0.62 to 1.07, with southern regions maintaining discounts and the northwestern core sustaining premium pricing. The similarity between Operator 0 and Operator 1 pricing (typical differences below 0.05) is consistent with convergence to a symmetric equilibrium.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/price_average_mode1.png}
+\caption{Time-averaged pricing scalars for the pricing-only policy, computed across all 20 timesteps.}
+\label{fig:pricing_mode1_average}
+\end{figure*}
+
+By the final timestep (Figure~\ref{fig:pricing_mode1_final}), prices have risen relative to the initial period but remain spatially heterogeneous (range 0.79 to 1.07). The persistence of southern discounts throughout the simulation confirms that indirect vehicle repositioning through pricing remains relevant across the full horizon.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/price_time_step_19_mode1.png}
+\caption{Final pricing policies at timestep 19 for the pricing-only policy.}
+\label{fig:pricing_mode1_final}
+\end{figure*}
+
+The demand allocation (Figure~\ref{fig:demand_mode1}) shows roughly balanced market shares between operators in the high-demand northwestern core. Total served demand in pricing-only mode (3,463.8) is lower than in other modes, yet this mode achieved the highest total reward (18,879.6). This indicates that spatial price differentiation enables higher per-trip revenue extraction, with premium prices in high-demand areas contributing disproportionately to profit while strategic discounts in low-demand areas provide fleet repositioning at low cost.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/demand_mode1.png}
+\caption{Total passenger demand allocation for the pricing-only policy, summed over all timesteps.}
+\label{fig:demand_mode1}
+\end{figure*}
+
+\subsubsection{Rebalancing Policy}
+
+With fixed reference prices, operators compete through vehicle positioning. Figure~\ref{fig:rebalancing_mode0} shows the net rebalancing flows, with both operators concentrating vehicles in the northwestern core. Operator 0 accumulates 33--44 net vehicles in this area while depleting peripheral regions by 13--28 vehicles. Operator 1 exhibits similar patterns. Since prices are identical across operators, passengers are allocated roughly equally by the choice model; the competitive advantage arises from the ability to serve a higher fraction of assigned passengers within the maximum wait threshold. Total served demand (3,532.8) is slightly higher than in the pricing-only mode, but total reward (18,174.2) remains lower, suggesting that operational efficiency through positioning alone cannot match the revenue optimization achievable with dynamic pricing.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/net_flow_mode0.png}
+\caption{Net rebalancing flows for the rebalancing-only policy, showing cumulative vehicle movements across all timesteps.}
+\label{fig:rebalancing_mode0}
+\end{figure*}
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/demand_mode0.png}
+\caption{Total passenger demand allocation for the rebalancing-only policy.}
+\label{fig:demand_mode0}
+\end{figure*}
+
+\subsubsection{Joint Control Policy}
+
+The joint control policy achieved the lowest total reward (17,685.7) among the three modes, despite having access to both pricing and rebalancing levers. Two features of the learned policies help explain this result.
+
+First, Figure~\ref{fig:pricing_mode2_average} shows that pricing under joint control is spatially uniform, with average scalars tightly clustered around 0.967 (range 0.962--0.968). This stands in contrast to the wide spatial variation (0.62--1.07) observed in the pricing-only mode. With rebalancing available, the operators appear to delegate fleet management to the rebalancing mechanism and use pricing primarily for revenue extraction. However, the resulting uniform pricing sacrifices the demand-shaping benefits that spatial price differentiation provided in the pricing-only mode.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/price_average_mode2.png}
+\caption{Time-averaged pricing scalars for the joint control policy.}
+\label{fig:pricing_mode2_average}
+\end{figure*}
+
+Second, Figure~\ref{fig:rebalancing_mode2} shows that both operators direct rebalancing flows toward the same high-demand northwestern regions. This parallel repositioning generates costs for both operators without a corresponding differentiation benefit, since both operators compete for the same passengers in the same locations. The combination of uniform pricing, which reduces total market size relative to spatially differentiated pricing, and duplicated rebalancing costs accounts for the lower total reward.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/net_flow_mode2.png}
+\caption{Net rebalancing flows for the joint control policy.}
+\label{fig:rebalancing_mode2}
+\end{figure*}
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/demand_mode2.png}
+\caption{Total passenger demand allocation for the joint control policy.}
+\label{fig:demand_mode2}
+\end{figure*}
+
+These results suggest that in competitive settings, the availability of multiple control levers does not guarantee improved performance. When both operators optimize jointly over pricing and rebalancing, they tend to converge on similar strategies, leading to redundant rebalancing and undifferentiated pricing. Constrained policy spaces, by contrast, force operators to differentiate along a single dimension and can yield higher total rewards.
+
+\subsection{Impact of Pricing Information}
+\label{sec:exp_no_pricing_info}
+
+We investigate the effect of competitor price visibility by comparing scenarios where operators can observe each other's prices versus when they cannot. Table~\ref{tab:info_sharing_comparison} presents the results for the NYC Manhattan South environment.
+
+\begin{table*}[ht]
+\centering
+\scriptsize
+\caption{Performance comparison with and without competitor price visibility in NYC Manhattan South in dual-operator setup. The numbers in parentheses indicate the standard deviations of each metric for 10 test runs. ``Price'' is the average price scalar set by each operator, and ``Wait/mins'' is the waiting time of the served passengers in minutes. ``Reb.'': Rebalancing, ``Pricing'': Pricing policy, ``Joint'': joint Pricing and Rebalancing.}
+\label{tab:info_sharing_comparison}
+\resizebox{0.95\textwidth}{!}{%
+\begin{tabular}{l ccc ccc}
+\toprule
+& \multicolumn{3}{c}{No Information Sharing} & \multicolumn{3}{c}{Information Sharing} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Policy & Reb. & Pricing & Joint & Reb. & Pricing & Joint \\
+\midrule
+Total Reward & 18190.5 (272.0) & 18813.1 (277.6) & 17491.9 (203.1) & 18174.2 (326.2) & 18879.6 (328.2) & 17685.7 (270.9) \\
+Reward Operator 0 & 9035.4 (206.1) & 9236.9 (172.1) & 8833.7 (150.9) & 9029.4 (228.1) & 9489.0 (183.1) & 8815.3 (221.2) \\
+Reward Operator 1 & 9155.0 (289.1) & 9576.2 (139.8) & 8658.2 (187.5) & 9144.9 (295.8) & 9390.6 (195.1) & 8870.4 (242.2) \\
+\cmidrule(lr){1-7}
+Total Rebalancing Costs & 1481.0 (94.3) & --- & 1256.7 (62.7) & 1549.3 (113.2) & --- & 1379.7 (97.0) \\
+Rebalancing Costs Operator 0 & 776.5 (69.5) & --- & 610.8 (40.7) & 821.7 (83.2) & --- & 708.8 (81.1) \\
+Rebalancing Costs Operator 1 & 704.4 (90.2) & --- & 645.9 (58.7) & 727.6 (100.3) & --- & 671.0 (71.2) \\
+\cmidrule(lr){1-7}
+Total Rebalance Trips & 316.1 (20.0) & --- & 257.3 (14.4) & 329.6 (22.2) & --- & 286.2 (22.3) \\
+Rebalance Trips Operator 0 & 166.4 (18.4) & --- & 125.1 (9.3) & 175.5 (20.7) & --- & 148.2 (19.2) \\
+Rebalance Trips Operator 1 & 149.7 (19.9) & --- & 132.2 (12.4) & 154.1 (22.1) & --- & 138.0 (15.8) \\
+\cmidrule(lr){1-7}
+Total Served Demand & 3523.6 (33.1) & 3467.1 (40.3) & 3583.3 (24.7) & 3532.8 (38.6) & 3463.8 (43.4) & 3572.5 (31.1) \\
+Served Demand Operator 0 & 1755.6 (24.8) & 1676.7 (23.9) & 1799.7 (13.9) & 1760.9 (26.2) & 1753.4 (21.8) & 1781.1 (23.0) \\
+Served Demand Operator 1 & 1768.0 (34.8) & 1790.4 (18.4) & 1783.6 (22.9) & 1771.9 (35.0) & 1710.4 (26.6) & 1791.4 (28.4) \\
+\cmidrule(lr){1-7}
+Price Operator 0 & --- & 0.94 (0.01) & 0.94 (0.00) & --- & 0.93 (0.01) & 0.97 (0.00) \\
+Price Operator 1 & --- & 0.93 (0.00) & 0.95 (0.00) & --- & 0.93 (0.01) & 0.97 (0.00) \\
+\cmidrule(lr){1-7}
+Wait/mins Operator 0 & 1.31 (0.07) & 1.05 (0.04) & 1.48 (0.07) & 1.29 (0.08) & 1.09 (0.06) & 1.43 (0.07) \\
+Wait/mins Operator 1 & 1.31 (0.05) & 1.07 (0.06) & 1.51 (0.06) & 1.31 (0.06) & 1.02 (0.05) & 1.45 (0.08) \\
+\cmidrule(lr){1-7}
+Queue Operator 0 & 8.14 (0.99) & 4.69 (0.81) & 10.7 (1.0) & 8.17 (0.92) & 5.14 (0.72) & 10.3 (1.3) \\
+Queue Operator 1 & 7.62 (1.32) & 5.67 (0.78) & 11.2 (1.1) & 7.73 (1.19) & 4.54 (0.69) & 9.98 (1.24) \\
+\cmidrule(lr){1-7}
+Total Demand & 4683.0 (73.9) & 4423.6 (58.2) & 5358.0 (54.1) & 4683.0 (73.9) & 4425.4 (60.9) & 5151.0 (61.4) \\
+Demand Operator 0 & 2336.2 (56.0) & 2121.9 (35.0) & 2651.7 (53.0) & 2336.2 (56.0) & 2278.4 (39.7) & 2568.0 (60.4) \\
+Demand Operator 1 & 2346.8 (39.4) & 2301.7 (37.7) & 2706.3 (34.5) & 2346.8 (39.4) & 2147.0 (29.9) & 2583.0 (40.0) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table*}
+
+Overall system performance is largely robust to price visibility. Total rewards across the three policies differ by at most 1.1\% between the two information conditions. The most notable differences appear under joint control, where price visibility leads both operators to converge to identical pricing (0.97 for both) rather than the slightly differentiated pricing observed without visibility (0.94 and 0.95). Information sharing is also associated with modestly higher rebalancing costs under joint control (1,379.7 vs. 1,256.7), suggesting that price visibility may encourage more aggressive spatial competition.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.35\textwidth]{Images/reward_curves_final.png}
+\caption{Convergence dynamics comparing scenarios with and without competitor price visibility: (a) Rebalancing, (b) Pricing, (c) Joint. Curves are smoothed over 30 episodes; the first 5,000 episodes are excluded for clarity. Note that rewards are training rewards based on sampling from the policy distributions and may therefore be lower than test rewards.}
+\label{fig:convergence_info_sharing}
+\end{figure}
+
+Figure~\ref{fig:convergence_info_sharing} compares the training convergence dynamics. Information sharing accelerates convergence for the rebalancing-only and pricing-only policies, indicating that competitor price observations provide useful learning signals. The effect is less pronounced for joint control, where the higher-dimensional optimization problem may dilute the relative benefit of additional information.
+
+
+
+\subsection{Fleet Size Sensitivity Analysis}
+
+Table~\ref{tab:policy_comparison_fleet} compares system performance under varying fleet sizes (450 to 1,250 vehicles, evenly split between operators) for the joint policy, no control (NC), and uniform distribution (UD) baselines.
+
+As fleet size increases, the joint control policy reduces prices (from 1.01/1.03 at 450 vehicles to 0.76/0.72 at 1,250 vehicles), stimulating demand to maintain fleet utilization. At 1,250 vehicles, the joint policy serves 6,291.7 passengers compared to 3,934.1 for NC and 4,633.2 for UD. However, the lower prices and higher demand come with increased waiting times and queue lengths relative to the baselines. At larger fleet sizes (1,050 and 1,250), NC achieves slightly higher total rewards due to zero rebalancing costs, though it serves substantially fewer passengers. This illustrates a trade-off between operational cost efficiency and service coverage.
+
+Rebalancing efficiency also differs across policies. The joint policy's rebalancing costs scale moderately with fleet size (reaching 2,971.9 at 1,250 vehicles with 649.8 trips), while UD incurs substantially higher costs (6,200.6 with 1,491.3 trips), indicating less efficient vehicle repositioning under the uniform distribution strategy.
+
+\begin{table*}[t]
+\centering
+\caption{System performance comparison across three policies (Joint Policy, NC, UD) under varying fleet sizes for NYC Manhattan South. Fleet vehicles are evenly distributed between the two operators. We perform 10 tests for each configuration and report the average performance with standard deviations in parentheses.}
+\label{tab:policy_comparison_fleet}
+\begin{tabular}{l cccccc ccc ccccc}
+\toprule
+& \multicolumn{6}{c}{\textbf{Joint Policy}} & \multicolumn{3}{c}{\textbf{NC}} & \multicolumn{5}{c}{\textbf{UD}} \\
+\cmidrule(lr){2-7} \cmidrule(lr){8-10} \cmidrule(lr){11-15}
+Fleet & Reward & Served & Rebal. & Rebal. & Price & Price & Reward & Served & Price & Reward & Served & Rebal. & Rebal. & Price \\
+Size & & & Costs & Trips & A0 & A1 & & & Both & & & Costs & Trips & Both \\
+\midrule
+450 & \makecell{14199.7 \\ \footnotesize (210.8)} & \makecell{2578.3 \\ \footnotesize (24.6)} & \makecell{821.0 \\ \footnotesize (64.2)} & \makecell{167.6 \\ \footnotesize (16.0)} & \makecell{1.01 \\ \footnotesize (0.00)} & \makecell{1.03 \\ \footnotesize (0.00)} & \makecell{12270.7 \\ \footnotesize (251.8)} & \makecell{2210.0 \\ \footnotesize (43.8)} & \makecell{1.00 \\ \footnotesize (0.00)} & \makecell{13228.7 \\ \footnotesize (136.7)} & \makecell{2550.7 \\ \footnotesize (14.3)} & \makecell{996.8 \\ \footnotesize (69.7)} & \makecell{202.3 \\ \footnotesize (15.9)} & \makecell{1.00 \\ \footnotesize (0.00)} \\
+\midrule
+650 & \makecell{17685.7 \\ \footnotesize (270.9)} & \makecell{3572.5 \\ \footnotesize (31.1)} & \makecell{1379.7 \\ \footnotesize (97.0)} & \makecell{286.2 \\ \footnotesize (22.3)} & \makecell{0.97 \\ \footnotesize (0.00)} & \makecell{0.97 \\ \footnotesize (0.00)} & \makecell{16048.4 \\ \footnotesize (416.6)} & \makecell{2894.2 \\ \footnotesize (73.9)} & \makecell{1.00 \\ \footnotesize (0.00)} & \makecell{17652.8 \\ \footnotesize (256.3)} & \makecell{3497.1 \\ \footnotesize (31.4)} & \makecell{1865.5 \\ \footnotesize (83.2)} & \makecell{389.8 \\ \footnotesize (18.1)} & \makecell{1.00 \\ \footnotesize (0.00)} \\
+\midrule
+850 & \makecell{20096.1 \\ \footnotesize (273.2)} & \makecell{4612.0 \\ \footnotesize (36.5)} & \makecell{1620.0 \\ \footnotesize (88.7)} & \makecell{331.9 \\ \footnotesize (19.6)} & \makecell{0.86 \\ \footnotesize (0.00)} & \makecell{0.86 \\ \footnotesize (0.00)} & \makecell{18683.9 \\ \footnotesize (461.8)} & \makecell{3367.4 \\ \footnotesize (83.3)} & \makecell{1.00 \\ \footnotesize (0.00)} & \makecell{19916.4 \\ \footnotesize (339.7)} & \makecell{4168.0 \\ \footnotesize (42.7)} & \makecell{3411.9 \\ \footnotesize (132.2)} & \makecell{767.0 \\ \footnotesize (29.3)} & \makecell{1.00 \\ \footnotesize (0.00)} \\
+\midrule
+1050 & \makecell{20461.6 \\ \footnotesize (276.2)} & \makecell{5542.5 \\ \footnotesize (44.4)} & \makecell{2059.8 \\ \footnotesize (94.3)} & \makecell{424.0 \\ \footnotesize (21.1)} & \makecell{0.78 \\ \footnotesize (0.00)} & \makecell{0.80 \\ \footnotesize (0.00)} & \makecell{20667.8 \\ \footnotesize (467.6)} & \makecell{3714.9 \\ \footnotesize (83.3)} & \makecell{1.00 \\ \footnotesize (0.00)} & \makecell{20433.6 \\ \footnotesize (558.6)} & \makecell{4533.2 \\ \footnotesize (71.6)} & \makecell{5000.1 \\ \footnotesize (161.6)} & \makecell{1184.5 \\ \footnotesize (37.5)} & \makecell{1.00 \\ \footnotesize (0.00)} \\
+\midrule
+1250 & \makecell{20909.3 \\ \footnotesize (294.3)} & \makecell{6291.7 \\ \footnotesize (30.2)} & \makecell{2971.9 \\ \footnotesize (101.7)} & \makecell{649.8 \\ \footnotesize (27.5)} & \makecell{0.76 \\ \footnotesize (0.00)} & \makecell{0.72 \\ \footnotesize (0.00)} & \makecell{21955.0 \\ \footnotesize (397.2)} & \makecell{3934.1 \\ \footnotesize (71.2)} & \makecell{1.00 \\ \footnotesize (0.00)} & \makecell{19831.4 \\ \footnotesize (534.9)} & \makecell{4633.2 \\ \footnotesize (78.1)} & \makecell{6200.6 \\ \footnotesize (219.1)} & \makecell{1491.3 \\ \footnotesize (57.1)} & \makecell{1.00 \\ \footnotesize (0.00)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Asymmetric Fleet Distribution}
+
+Table~\ref{tab:fleet_split_results_dual} reports the joint policy performance under asymmetric fleet splits between the two operators. The total system reward peaks at the 3:7 split (17,689.3) before declining at more extreme asymmetries, suggesting that moderate imbalance can benefit overall system performance, possibly due to reduced direct competition for the same demand.
+
+The pricing strategies adapt to fleet asymmetry: the smaller operator gradually increases prices (from 0.95 at the 5:5 split to 1.05 at the 1:9 split), while the larger operator maintains lower prices (0.92--0.94) to leverage its capacity advantage. Rebalancing patterns shift accordingly: the smaller operator's rebalancing activity decreases as its fleet shrinks (from 145.1 trips at 5:5 to 8.10 at 1:9), while the larger operator's activity increases. Total served demand remains relatively stable across configurations (3,500.9--3,612.3), indicating that system capacity rather than the specific fleet allocation is the primary constraint on service levels. Demand shares reflect fleet proportions, though not perfectly: in the 1:9 split, Operator 1 with 90\% of the fleet serves 88.8\% of total demand, suggesting modest diminishing returns to fleet size.
+
+\begin{table*}[!htbp]
+\centering
+\caption{System performance under varying fleet splits in NYC Manhattan South with dual policy. We perform 10 tests for each fleet configuration and report the average performance with standard deviations in parentheses. O0 and O1 represent Operator 0 and Operator 1 respectively. Each model has been trained for 100,000 episodes and the 5:5 split therefore diverges slightly from other results presented.}
+\label{tab:fleet_split_results_dual}
+\begin{tabular}{c c c c c c c c c c c c}
+\toprule
+\makecell{Fleet Split \\ (O0:O1)} & \makecell{Total \\ Reward} & \makecell{O0 \\ Reward} & \makecell{O1 \\ Reward} & \makecell{Total Rebal. \\ Trips} & \makecell{O0 Rebal. \\ Trips} & \makecell{O1 Rebal. \\ Trips} & \makecell{O0 \\ Price} & \makecell{O1 \\ Price} & \makecell{Total \\ Served} & \makecell{O0 \\ Served} & \makecell{O1 \\ Served} \\
+\midrule
+5:5 & \makecell{17402.5 \\ \footnotesize (191.7)} & \makecell{8510.6 \\ \footnotesize (155.5)} & \makecell{8891.9 \\ \footnotesize (184.5)} & \makecell{263.7 \\ \footnotesize (20.6)} & \makecell{145.1 \\ \footnotesize (13.9)} & \makecell{118.6 \\ \footnotesize (12.8)} & \makecell{0.95 \\ \footnotesize (0.00)} & \makecell{0.94 \\ \footnotesize (0.00)} & \makecell{3587.0 \\ \footnotesize (24.6)} & \makecell{1769.0 \\ \footnotesize (19.4)} & \makecell{1818.0 \\ \footnotesize (21.6)} \\
+\midrule
+4:6 & \makecell{17562.2 \\ \footnotesize (236.1)} & \makecell{7497.2 \\ \footnotesize (137.0)} & \makecell{10065.1 \\ \footnotesize (192.0)} & \makecell{268.1 \\ \footnotesize (20.7)} & \makecell{96.0 \\ \footnotesize (10.8)} & \makecell{172.1 \\ \footnotesize (14.8)} & \makecell{0.97 \\ \footnotesize (0.00)} & \makecell{0.94 \\ \footnotesize (0.00)} & \makecell{3586.4 \\ \footnotesize (27.4)} & \makecell{1464.7 \\ \footnotesize (14.6)} & \makecell{2121.7 \\ \footnotesize (24.9)} \\
+\midrule
+3:7 & \makecell{17689.3 \\ \footnotesize (209.5)} & \makecell{6010.7 \\ \footnotesize (127.4)} & \makecell{11678.6 \\ \footnotesize (168.8)} & \makecell{249.9 \\ \footnotesize (20.9)} & \makecell{65.6 \\ \footnotesize (7.2)} & \makecell{184.3 \\ \footnotesize (16.4)} & \makecell{0.99 \\ \footnotesize (0.00)} & \makecell{0.92 \\ \footnotesize (0.00)} & \makecell{3612.3 \\ \footnotesize (26.1)} & \makecell{1115.5 \\ \footnotesize (15.0)} & \makecell{2496.8 \\ \footnotesize (21.9)} \\
+\midrule
+2:8 & \makecell{17112.8 \\ \footnotesize (238.7)} & \makecell{4309.5 \\ \footnotesize (117.8)} & \makecell{12803.4 \\ \footnotesize (194.0)} & \makecell{278.7 \\ \footnotesize (16.4)} & \makecell{34.7 \\ \footnotesize (4.3)} & \makecell{244.0 \\ \footnotesize (15.1)} & \makecell{1.01 \\ \footnotesize (0.00)} & \makecell{0.93 \\ \footnotesize (0.00)} & \makecell{3553.3 \\ \footnotesize (31.8)} & \makecell{762.8 \\ \footnotesize (12.7)} & \makecell{2790.5 \\ \footnotesize (26.4)} \\
+\midrule
+1:9 & \makecell{16626.8 \\ \footnotesize (218.0)} & \makecell{2423.9 \\ \footnotesize (84.6)} & \makecell{14202.9 \\ \footnotesize (226.7)} & \makecell{300.9 \\ \footnotesize (17.6)} & \makecell{8.10 \\ \footnotesize (1.70)} & \makecell{292.8 \\ \footnotesize (18.0)} & \makecell{1.05 \\ \footnotesize (0.00)} & \makecell{0.92 \\ \footnotesize (0.00)} & \makecell{3500.9 \\ \footnotesize (29.1)} & \makecell{393.6 \\ \footnotesize (9.1)} & \makecell{3107.3 \\ \footnotesize (29.9)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Regional Wage Heterogeneity}
+\label{sec:exp_wage_heterogeneity}
+
+To evaluate how spatially varying passenger incomes affect learned policies, we conduct experiments in NYC Manhattan South where regional wages range from approximately \$10 per hour in southeastern regions to over \$35 per hour in northwestern regions (Figure~\ref{fig:wage_distribution}). The total fleet size is 650 vehicles, evenly split between operators.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.48\textwidth]{Images/regional_wages.png}
+\caption{Average hourly passenger wage distribution across regions in NYC Manhattan South under regional income heterogeneity.}
+\label{fig:wage_distribution}
+\end{figure}
+
+Table~\ref{tab:wage_heterogeneity_results} presents the performance metrics. The system achieves a total reward of 24,624.2, with both operators earning comparable rewards (12,630.5 and 11,993.7). Compared to the homogeneous-wage setting (Table~\ref{tab:performance_metrics_dual}, total reward 17,685.7 for joint control), the wage-heterogeneous environment yields substantially higher rewards. This increase is driven by the presence of high-income regions where the choice model generates higher willingness to pay, enabling elevated pricing.
+
+\begin{table}[ht]
+\centering
+\caption{Performance metrics for joint pricing and rebalancing policy with regional wage heterogeneity in NYC Manhattan South. The numbers in parentheses indicate the standard deviations across 10 test runs. All values are averaged across all regions.}
+\label{tab:wage_heterogeneity_results}
+\begin{tabular}{lc}
+\toprule
+Metric & Joint Policy \\
+\midrule
+Total Reward & 24624.2 (490.1) \\
+Reward Operator 0 & 12630.5 (264.3) \\
+Reward Operator 1 & 11993.7 (303.2) \\
+\cmidrule(lr){1-2}
+Total Rebalancing Costs & 2486.7 (99.8) \\
+Rebalancing Costs Operator 0 & 1161.0 (61.8) \\
+Rebalancing Costs Operator 1 & 1325.7 (49.8) \\
+\cmidrule(lr){1-2}
+Total Rebalance Trips & 572.7 (25.2) \\
+Rebalance Trips Operator 0 & 266.8 (13.4) \\
+Rebalance Trips Operator 1 & 305.9 (15.1) \\
+\cmidrule(lr){1-2}
+Total Served Demand & 3032.6 (38.0) \\
+Served Demand Operator 0 & 1549.6 (20.3) \\
+Served Demand Operator 1 & 1483.0 (26.1) \\
+\cmidrule(lr){1-2}
+Price Operator 0 & 1.27 (0.00) \\
+Price Operator 1 & 1.31 (0.00) \\
+\cmidrule(lr){1-2}
+Wait/mins Operator 0 & 0.93 (0.06) \\
+Wait/mins Operator 1 & 0.95 (0.09) \\
+\cmidrule(lr){1-2}
+Queue Operator 0 & 4.67 (0.98) \\
+Queue Operator 1 & 5.93 (1.14) \\
+\cmidrule(lr){1-2}
+Total Demand & 3510.9 (47.3) \\
+Demand Operator 0 & 1775.4 (20.4) \\
+Demand Operator 1 & 1735.5 (30.9) \\
+\cmidrule(lr){1-2}
+Average Wage & 25.8 (0.1) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The learned policies exhibit clear spatial adaptation. The rebalancing flows (Figure~\ref{fig:rebalancing_flows_wage}) show that both operators reposition vehicles from low-income southeastern regions toward high-income northwestern regions, where demand and revenue potential are concentrated. The pricing strategies (Figure~\ref{fig:pricing_wage}) follow a corresponding pattern: both operators set higher price scalars in high-income regions (1.40--1.45) compared to low-income regions (1.15--1.28). Demand (Figure~\ref{fig:demand_wage}) is heavily concentrated in the northwestern regions, with the southeastern regions exhibiting minimal trip volumes.
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/net_flow_different_wage.png}
+\caption{Net rebalancing flows per region for (a) Operator 0 and (b) Operator 1 under regional income heterogeneity. Positive values indicate net inflow; negative values indicate net outflow.}
+\label{fig:rebalancing_flows_wage}
+\end{figure*}
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/demand_different_wage.png}
+\caption{Total demand originating from each region for (a) Operator 0 and (b) Operator 1 under regional income heterogeneity.}
+\label{fig:demand_wage}
+\end{figure*}
+
+\begin{figure*}[ht]
+\centering
+\includegraphics[width=0.7\textwidth]{Images/average_price_scalar_different_wage.png}
+\caption{Average pricing scalars per region for (a) Operator 0 and (b) Operator 1 under regional income heterogeneity.}
+\label{fig:pricing_wage}
+\end{figure*}
+
+These results demonstrate that the learned policies adapt to regional economic heterogeneity by concentrating fleets and setting higher prices in high-income, high-demand areas. While this behavior is rational from a profit-maximization perspective, it raises equity concerns, as low-income regions receive reduced service levels. This finding highlights the potential need for regulatory mechanisms to ensure minimum service standards across regions with varying economic conditions.
+
+% filepath: /work3/s233791/rl-pricing-amod/main (3).tex
+\section{Conclusion}
+\label{sec:conclusion}
+
+This paper has presented a multi-operator reinforcement learning framework for joint pricing and fleet rebalancing in Autonomous Mobility-on-Demand systems. By integrating a discrete choice model into the learning loop, the framework produces an environment where passenger demand responds endogenously to operator pricing and where allocation between competing operators emerges from utility-maximizing passenger decisions.
+
+The experimental results yield several findings. First, in the monopolistic setting, joint pricing and rebalancing consistently achieves the highest operator profit across all cities. However, this profit maximization does not uniformly benefit passengers. Rebalancing-only policies can deliver shorter waiting times, as observed in San Francisco where waiting times under rebalancing (0.26 minutes) are substantially lower than under joint control (0.51 minutes). Joint control increases profit partly by accepting longer passenger wait times and by using pricing to manage demand rather than improving service quality. This distinction between operator profitability and passenger welfare is important: policies that are optimal from the operator's perspective may not align with passenger interests, and the two objectives can be in direct tension.
+
+Second, the transition from a monopolistic to a competitive setting changes which control strategies are most profitable for operators. While joint control dominates in the monopolistic case, competitive scenarios can favor specialized policies. In the NYC Manhattan South environment, pricing-only control achieved the highest total reward among competing operators, as spatial price differentiation served a dual purpose of revenue extraction and indirect fleet repositioning, while avoiding the redundant rebalancing costs observed under joint control. From a passenger perspective, competition generally drives prices downward relative to monopolistic settings, which benefits passengers through lower fares. However, fragmented fleet management under competition leads to higher waiting times, illustrating that the welfare effects of competition are mixed.
+
+Third, the magnitude of competition-induced profit losses is related to the spatial variability of demand, with high-variability environments suffering larger reductions. Fourth, the framework adapts to regional wage heterogeneity, with operators learning to concentrate fleets and set higher prices in high-income areas. While rational from a profit-maximization standpoint, this pattern results in reduced service levels for low-income regions, raising concerns about equitable access to mobility services.
+
+Several limitations of this work should be acknowledged. The framework currently models only two operators; extending it to three or more competing platforms would increase the complexity of the strategic interactions and may alter the equilibrium properties observed. The passenger choice model does not incorporate expected waiting time as a factor in mode selection, which in practice is likely to influence passenger decisions and would create an additional feedback channel between operator actions and demand. The simulation considers a one-hour peak period, and extending the horizon to full-day or multi-day operations would be necessary to capture longer-term fleet dynamics and demand cyclicality. The assumption of full price observability between operators, while relaxed in one experiment, may not hold in all real-world settings, and the effects of partial or delayed information deserve further investigation. 
+
+These findings and limitations suggest several directions for future research. Incorporating waiting time into both the passenger utility function and the operator reward would enable the framework to capture the trade-off between profitability and service quality, and would compel operators to compete on passenger experience in addition to price. The observation that profit-maximizing operators tend to underserve low-income regions points to the need for investigating regulatory mechanisms, such as minimum service requirements or rebalancing subsidies, that can align private operator incentives with both efficiency and equity objectives. Extending the framework to more than two operators, longer time horizons, and larger networks would further test the generality of the observed competitive dynamics.
+
+\section*{Acknowledgments}
+Special thanks to my supervisors, Filipe Rodrigues and Carolin Samanta Schmidt, for their constant encouragement and involvement. I am particularly indebted to them for being such excellent sounding boards throughout the development of this project. Our discussions and their thoughtful guidance were essential in shaping the final outcome of this research.
+{\appendices
+
+\section{Vehicle Rebalancing Model}
+\label{app: min_cost}
+The rebalancing model follows the approach used in~\cite{9683135}. At each time step $t$, the model determines the rebalancing flows $\{y_{i,j,o}^t\}$ for operator $o$ that minimize the total rebalancing cost while satisfying the desired vehicle distribution specified by the actor network. The optimization problem is formulated as:
+
+\begin{equation}\label{eq:rebalancing_objective}
+\min \sum_{(i,j) \in \mathcal{E}} c_{i,j,o}^t y_{i,j,o}^t
+\end{equation}
+
+subject to:
+
+\begin{equation}\label{eq:rebalancing_flow_balance}
+\sum_{j \neq i} (y_{j,i,o}^t - y_{i,j,o}^t) + m_{i,o}^t \geq \tilde{m}_{i,o}^t, \quad i \in \mathcal{V}
+\end{equation}
+
+\begin{equation}\label{eq:rebalancing_capacity}
+\sum_{j \neq i} y_{i,j,o}^t \leq m_{i,o}^t, \quad i \in \mathcal{V}
+\end{equation}
+
+\begin{equation}\label{eq:rebalancing_nonnegative}
+y_{i,j,o}^t \geq 0, \quad (i,j) \in \mathcal{E}
+\end{equation}
+
+where $\tilde{m}_{i,o}^t$ denotes the number of desired vehicles at region $i$ for operator $o$ at time $t$. Objective~\eqref{eq:rebalancing_objective} minimizes the rebalancing cost. Constraint~\eqref{eq:rebalancing_flow_balance} ensures that the desired vehicle number is satisfied, accounting for the current idle vehicles $m_{i,o}^t$ and the net inflow of rebalanced vehicles. Constraint~\eqref{eq:rebalancing_capacity} limits the rebalancing flow from each region by the number of available idle vehicles. The desired vehicle distribution is calculated by $\tilde{m}_{i,o}^t = \lfloor w_{i,o}^t \sum_{i \in \mathcal{V}} m_{i,o}^t \rfloor$, where $w_{i,o}^t$ is the rebalancing weight output by the actor network for region $i$.
+
+\section{Choice Model Calibration}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.48\textwidth]{Images/price_sensitivity_rejection_rates.png}
+  \caption{Rejection rate versus price scalar relative to the historical reference price across studied datasets for both single and dual-operator setups, with the model calibrated to a 50\% rejection rate at the historical reference price.}
+  \label{fig:price_sensitivity}
+\end{figure}
+
+\section{OD Versus Origin Based Pricing}
+\label{app:odori}
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.48\textwidth]{Images/od_versus_origin_reward_curves.png}
+  \caption{Episode rewards for OD based versus origin based pricing for the dual-operator setup with joint policy control. The line is smoothed by using a 100 episode rolling mean.}
+  \label{fig:od_vs_origin}
+\end{figure}
+}
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
+
+
