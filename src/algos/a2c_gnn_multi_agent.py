@@ -16,7 +16,7 @@ class GNNParser:
     Parser converting raw environment observations to agent inputs (s_t).
     """
 
-    def __init__(self, env, T, scale_factor, agent_id, json_file=None, use_od_prices=False, no_share_info=False):
+    def __init__(self, env, T, scale_factor, agent_id, json_file=None, observe_od_prices=False, no_share_info=False):
         super().__init__()
         self.env = env
         self.T = T
@@ -26,7 +26,7 @@ class GNNParser:
         self.no_share_info = no_share_info
         # Only compute opponent_id if sharing info
         self.opponent_id = 1 - agent_id if not no_share_info else None
-        self.use_od_prices = use_od_prices
+        self.observe_od_prices = observe_od_prices
         if self.json_file is not None:
             with open(json_file, "r") as file:
                 self.data = json.load(file)
@@ -46,8 +46,8 @@ class GNNParser:
         # Current demand at t
         current_demand = torch.tensor([sum([(demand[i, j][time])* self.s for j in self.env.region]) for i in self.env.region]).view(1, 1, self.env.nregion).float()
 
-        # Price features (conditional on use_od_prices)
-        if self.use_od_prices:
+        # Price features (conditional on observe_od_prices)
+        if self.observe_od_prices:
             # OD price matrices: shape [1, nregion, nregion] for each agent
             own_current_price = torch.tensor([[self.env.agent_price[self.agent_id][i, j].get(time, 0) * self.s 
                                               for j in self.env.region] 
@@ -159,7 +159,7 @@ class A2C(nn.Module):
         scale_factor,
         agent_id,
         json_file,
-        use_od_prices,
+        observe_od_prices,
         od_price_actions=False,  # whether to use OD-based price actions
         no_share_info=False,  # whether to share competitor pricing info
         reward_scale=1000.0,  # reward scaling factor
@@ -180,7 +180,7 @@ class A2C(nn.Module):
         self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode, od_price_actions=od_price_actions)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
         self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor,
-                                   agent_id=agent_id, use_od_prices=use_od_prices, no_share_info=no_share_info)
+                                   agent_id=agent_id, observe_od_prices=observe_od_prices, no_share_info=no_share_info)
 
         self.p_lr = p_lr
         self.q_lr = q_lr

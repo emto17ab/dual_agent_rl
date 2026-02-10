@@ -18,13 +18,13 @@ class GNNParser:
     Parser converting raw environment observations to agent inputs (s_t).
     """
 
-    def __init__(self, env, T, scale_factor, json_file=None, use_od_prices=False):
+    def __init__(self, env, T, scale_factor, json_file=None, observe_od_prices=False):
         super().__init__()
         self.env = env
         self.T = T
         self.s = scale_factor
         self.json_file = json_file
-        self.use_od_prices = use_od_prices
+        self.observe_od_prices = observe_od_prices
         if self.json_file is not None:
             with open(json_file, "r") as file:
                 self.data = json.load(file)
@@ -44,7 +44,7 @@ class GNNParser:
         # Current demand at t
         current_demand = torch.tensor([sum([(demand[i, j][time])* self.s for j in self.env.region]) for i in self.env.region]).view(1, 1, self.env.nregion).float()
 
-        if self.use_od_prices:
+        if self.observe_od_prices:
             # Current OD prices at t - shape [nregion, nregion] for OD-specific prices
             current_price = torch.tensor([[(self.env.price[i, j][time])* self.s for j in self.env.region] for i in self.env.region]).view(1, self.env.nregion, self.env.nregion).float()
             
@@ -96,7 +96,7 @@ class A2C(nn.Module):
         critic_clip,   # gradient clipping value for critic
         scale_factor,
         json_file = None,
-        use_od_prices = False,
+        observe_od_prices = False,
         reward_scale = 0.00005,  # reward scaling factor
         eps=np.finfo(np.float32).eps.item(),
         job_id = None  # unique identifier for this model instance
@@ -114,7 +114,7 @@ class A2C(nn.Module):
 
         self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
-        self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor, use_od_prices=use_od_prices)
+        self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor, observe_od_prices=observe_od_prices)
 
         self.p_lr = p_lr
         self.q_lr = q_lr

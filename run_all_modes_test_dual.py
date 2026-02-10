@@ -52,7 +52,7 @@ def run_mode(mode):
         "--city", CITY,
         "--checkpoint_path", checkpoint_path,
         "--model_type", MODEL_TYPE,
-        "--use_od_prices",
+        "--observe_od_prices",
     ]
     
     # Only add --load for modes that need checkpoints (0, 1, 2)

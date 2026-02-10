@@ -1,6 +1,8 @@
-pip==25.2
-python-dotenv==1.1.1
-scikit-learn==1.7.1
+numpy==2.2.6
 torch==2.8.0
 torch-geometric==2.6.1
+networkx==3.4.2
+scikit-learn==1.7.1
 wandb==0.22.0
+python-dotenv==1.1.1
+tqdm==4.67.1

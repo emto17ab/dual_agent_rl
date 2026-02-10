@@ -19,19 +19,17 @@ from src.misc.utils import dictsum, nestdictsum
 load_dotenv()
 
 # Calibrated simulation parameters
-demand_ratio = {'san_francisco': 2,'nyc_man_south': 1.0, 'nyc_brooklyn': 9, 'washington_dc': 4.2}
+demand_ratio = {'san_francisco': 2,'nyc_man_south': 1.0, 'washington_dc': 4.2}
 
-json_hr = {'san_francisco':19,'nyc_man_south': 19, 'nyc_brooklyn': 19, 'washington_dc': 19}
+json_hr = {'san_francisco':19,'nyc_man_south': 19, 'washington_dc': 19}
 
-beta = {'san_francisco': 0.2,'nyc_man_south': 0.5, 'nyc_brooklyn':0.5, 'washington_dc': 0.5}
+beta = {'san_francisco': 0.2,'nyc_man_south': 0.5, 'washington_dc': 0.5}
 
 choice_intercept = {'san_francisco': 14.15, 'nyc_man_south': 9.84, 'washington_dc': 11.75}
-#2008->2009: 0.3%, 2009->2010: 1.6%, 2010->2011: 3.1%, 2011->2012: 2.1%, 2012->2013: 1.5%
-# Total: approximately 8.9% cumulative increase from 2008 to 2013
-#inflation_factor = 1.089  # To convert 2013 dollars to 2008 dollars, divide by this
+
 wage = {'san_francisco': 17.76, 'nyc_man_south': 22.77, 'washington_dc': 25.26}
 
-test_tstep = {'san_francisco': 3, 'nyc_man_south': 3, 'nyc_brooklyn': 4, 'washington_dc':3}
+test_tstep = {'san_francisco': 3, 'nyc_man_south': 3, 'washington_dc':3}
 
 parser = argparse.ArgumentParser(description="A2C-GNN")
 
@@ -71,14 +69,6 @@ parser.add_argument(
     help='rebalancing mode. (0:manual, 1:pricing, 2:both, 3:baseline (no reb, fixed price), 4:baseline (uniform reb, fixed price). default 2)',
 )
 
-parser.add_argument(
-    "--beta",
-    type=float,
-    default=0.5,
-    metavar="S",
-    help="cost of rebalancing (default: 0.5)",
-)
-
 # Model parameters
 parser.add_argument(
     "--test", 
@@ -102,9 +92,9 @@ parser.add_argument(
 parser.add_argument(
     "--max_episodes",
     type=int,
-    default=15000,
+    default=100000,
     metavar="N",
-    help="number of episodes to train agent (default: 15k)",
+    help="number of episodes to train agent (default: 100k)",
 )
 parser.add_argument(
     "--max_steps",
@@ -162,42 +152,42 @@ parser.add_argument(
 parser.add_argument(
     "--actor_clip",
     type=float,
-    default=500,
-    help="clip value for actor gradient clipping (default: 500)",
+    default=1000,
+    help="clip value for actor gradient clipping (default: 1000)",
 )
 
 parser.add_argument(
     "--critic_clip",
     type=float,
-    default=500,
-    help="clip value for critic gradient clipping (default: 500)",
+    default=1000,
+    help="clip value for critic gradient clipping (default: 1000)",
 )
 
 parser.add_argument(
     "--critic_warmup_episodes",
     type=int,
-    default=1000,
-    help="number of episodes to train only critic before training actor (default: 0, no warmup)",
+    default=50,
+    help="number of episodes to train only critic before training actor (default: 50)",
 )
 
 parser.add_argument(
     "--p_lr",
     type=float,
-    default=1e-4,
-    help="learning rate for policy network (default: 1e-4)",
+    default=2e-4,
+    help="learning rate for policy network (default: 2e-4)",
 )
 
 parser.add_argument(
     "--q_lr",
     type=float,
-    default=1e-4,
-    help="learning rate for Q networks (default: 1e-4)",
+    default=6e-4,
+    help="learning rate for Q networks (default: 6e-4)",
 )
 
 parser.add_argument(
     "--city",
     type=str,
-    default="nyc_manhattan",
+    default="nyc_man_south",
     help="city to train on",
 )
 
@@ -266,7 +256,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--use_od_prices",
+    "--od_price_observe",
     action="store_true",
     default=False,
     help="Use OD price matrices instead of aggregated prices per region (default: False)",
@@ -307,13 +297,13 @@ args = parser.parse_args()
 if not (0.0 <= args.agent0_vehicle_ratio <= 1.0):
     raise ValueError(f"agent0_vehicle_ratio must be between 0.0 and 1.0, got {args.agent0_vehicle_ratio}")
 
-# Automatically enable use_od_prices when od_price_actions is True
-if args.od_price_actions and not args.use_od_prices:
+# Automatically enable od_price_observe when od_price_actions is True
+if args.od_price_actions and not args.od_price_observe:
     print("=" * 80)
-    print("INFO: Automatically enabling --use_od_prices since --od_price_actions is set")
+    print("INFO: Automatically enabling --od_price_observe since --od_price_actions is set")
     print("      (OD-based actions require OD-based observations)")
     print("=" * 80)
-    args.use_od_prices = True
+    args.od_price_observe = True
 
 # Set device
 args.cuda = args.cuda and torch.cuda.is_available()
@@ -597,7 +587,7 @@ if not args.test:
     # Only create models if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
         # Calculate input size based on price type
-        if args.use_od_prices:
+        if args.od_price_observe:
             if args.no_share_info:
                 # Only own prices: T (future) + 3 (current_avb, queue, demand) + nregion (own OD prices)
                 input_size = args.look_ahead + 3 + env.nregion
@@ -628,7 +618,7 @@ if not args.test:
                     critic_clip=args.critic_clip,
                     gamma=args.gamma,
                     agent_id = a,
-                    use_od_prices = args.use_od_prices,
+                    observe_od_prices = args.od_price_observe,
                     od_price_actions = args.od_price_actions,
                     no_share_info = args.no_share_info,
                     reward_scale=args.reward_scalar,
@@ -1409,7 +1399,7 @@ else:
         print("=" * 80)
 
     # Calculate input size based on price type
-    if args.use_od_prices:
+    if args.od_price_observe:
         if args.no_share_info:
             # Only own prices: T (future) + 3 (current_avb, queue, demand) + nregion (own OD prices)
             input_size = args.look_ahead + 3 + env.nregion
@@ -1442,7 +1432,7 @@ else:
                     critic_clip=args.critic_clip,
                     gamma=args.gamma,
                     agent_id = a,
-                    use_od_prices = args.use_od_prices,
+                    observe_od_prices = args.od_price_observe,
                     od_price_actions = args.od_price_actions,
                     no_share_info = args.no_share_info,
                     reward_scale=args.reward_scalar,

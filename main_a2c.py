@@ -18,19 +18,17 @@ from src.misc.utils import dictsum, nestdictsum
 load_dotenv()
 
 # Calibrated simulation parameters
-demand_ratio = {'san_francisco': 2,'nyc_man_south': 1.0, 'nyc_brooklyn': 9, 'washington_dc': 4.2}
+demand_ratio = {'san_francisco': 2,'nyc_man_south': 1.0, 'washington_dc': 4.2}
 
-json_hr = {'san_francisco':19,'nyc_man_south': 19, 'nyc_brooklyn': 19, 'washington_dc': 19}
+json_hr = {'san_francisco':19,'nyc_man_south': 19, 'washington_dc': 19}
 
-beta = {'san_francisco': 0.2,'nyc_man_south': 0.5, 'nyc_brooklyn':0.5, 'washington_dc': 0.5}
+beta = {'san_francisco': 0.2,'nyc_man_south': 0.5, 'washington_dc': 0.5}
 
 choice_intercept = {'san_francisco': 14.79, 'nyc_man_south': 10.55, 'washington_dc': 12.45}
-#2008->2009: 0.3%, 2009->2010: 1.6%, 2010->2011: 3.1%, 2011->2012: 2.1%, 2012->2013: 1.5%
-# Total: approximately 8.9% cumulative increase from 2008 to 2013
-#inflation_factor = 1.089  # To convert 2013 dollars to 2008 dollars, divide by this
+
 wage = {'san_francisco': 17.76, 'nyc_man_south': 22.77, 'washington_dc': 25.26}
 
-test_tstep = {'san_francisco': 3, 'nyc_man_south': 3, 'nyc_brooklyn': 4, 'washington_dc':3}
+test_tstep = {'san_francisco': 3, 'nyc_man_south': 3, 'washington_dc':3}
 
 parser = argparse.ArgumentParser(description="A2C-GNN")
 
@@ -93,9 +91,9 @@ parser.add_argument(
 parser.add_argument(
     "--max_episodes",
     type=int,
-    default=15000,
+    default=100000,
     metavar="N",
-    help="number of episodes to train agent (default: 15k)",
+    help="number of episodes to train agent (default: 100k)",
 )
 parser.add_argument(
     "--max_steps",
@@ -155,15 +153,15 @@ parser.add_argument(
 parser.add_argument(
     "--actor_clip",
     type=float,
-    default=500,
-    help="clip value for actor gradient clipping (default: 500)",
+    default=1000,
+    help="clip value for actor gradient clipping (default: 1000)",
 )
 
 parser.add_argument(
     "--critic_clip",
     type=float,
-    default=500,
-    help="clip value for critic gradient clipping (default: 500)",
+    default=1000,
+    help="clip value for critic gradient clipping (default: 1000)",
 )
 
 parser.add_argument(
@@ -176,15 +174,15 @@ parser.add_argument(
 parser.add_argument(
     "--p_lr",
     type=float,
-    default=1e-4,
-    help="learning rate for policy network (default: 1e-4)",
+    default=2e-4,
+    help="learning rate for policy network (default: 2e-4)",
 )
 
 parser.add_argument(
     "--q_lr",
     type=float,
-    default=1e-4,
-    help="learning rate for Q networks (default: 1e-4)",
+    default=6e-4,
+    help="learning rate for Q networks (default: 6e-4)",
 )
 
 parser.add_argument(
@@ -237,7 +235,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--use_od_prices",
+    "--observe_od_prices",
     action="store_true",
     default=False,
     help="Use OD price matrices instead of aggregated prices per region (default: False)",
@@ -246,8 +244,8 @@ parser.add_argument(
 parser.add_argument(
     "--reward_scalar",
     type=float,
-    default=1000.0,
-    help="Reward scaling factor (default: 1000.0)",
+    default=2000.0,
+    help="Reward scaling factor (default: 2000.0)",
 )
 
 parser.add_argument(
@@ -255,13 +253,6 @@ parser.add_argument(
     action="store_true",
     default=False,
     help="Fix baseline behavior: use base price and initial vehicle distribution (default: False)",
-)
-
-parser.add_argument(
-    "--dynamic_wage",
-    action="store_true",
-    default=False,
-    help="Enable dynamic wage adjustment (default: False)",
 )
 
 # Parser arguments
@@ -295,7 +286,7 @@ if not args.test:
                 supply_ratio=args.supply_ratio)
 
     # Create the environment
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city], dynamic_wage=args.dynamic_wage)
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city])
     
     # Print baseline information
     if args.fix_baseline:
@@ -335,7 +326,7 @@ if not args.test:
     # Only create model if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
         # Calculate input size based on price type
-        if args.use_od_prices:
+        if args.observe_od_prices:
             # OD price matrices: T (future) + 3 (current_avb, queue, demand) + 2*nregion (own and competitor OD prices)
             input_size = args.look_ahead + 3 + env.nregion
         else:
@@ -357,7 +348,7 @@ if not args.test:
                 actor_clip=args.actor_clip,
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
-                use_od_prices=args.use_od_prices,
+                observe_od_prices=args.observe_od_prices,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )
@@ -804,12 +795,12 @@ else:
                 supply_ratio=args.supply_ratio)
     
     # Create the environment
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city], dynamic_wage=args.dynamic_wage)
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city])
 
     # Only create model if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
         # Calculate input size based on price type
-        if args.use_od_prices:
+        if args.observe_od_prices:
             # OD price matrices: T (future) + 3 (current_avb, queue, demand) + 2*nregion (own and competitor OD prices)
             input_size = args.look_ahead + 3 + env.nregion
         else:
@@ -831,7 +822,7 @@ else:
                 actor_clip=args.actor_clip,
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
-                use_od_prices=args.use_od_prices,
+                observe_od_prices=args.observe_od_prices,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )

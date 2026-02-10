@@ -16,7 +16,7 @@ from src.envs.structures import generate_passenger
 
 
 class AMoD:
-    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, choice_intercept, fix_baseline=False, wage=25, dynamic_wage=False):
+    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, choice_intercept, fix_baseline=False, wage=25):
         self.scenario = deepcopy(scenario)
         self.mode = mode  # Mode of rebalancing (0:manul, 1:pricing, 2:both. default 1)
         self.jitter = jitter # Jitter for zero demand
@@ -26,8 +26,6 @@ class AMoD:
         self.choice_intercept = choice_intercept
         # Wage parameter for choice model
         self.wage = wage
-        # Dynamic wage flag (not used yet)
-        self.dynamic_wage = dynamic_wage
         self.G = scenario.G  # Road Graph: node - regiocon'dn, edge - connection of regions, node attr: 'accInit', edge attr: 'time'
         self.demandTime = self.scenario.demandTime
         self.rebTime = self.scenario.rebTime
