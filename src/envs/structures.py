@@ -1,5 +1,4 @@
 import random
-import scipy.stats as stats
 
 
 class Passenger:
@@ -50,8 +49,7 @@ class Passenger:
 def choice_passenger_enter(price, mtype=None):
     """Choice model for passenger entering queue. Return True if enter else return False."""
     if mtype is None:
-        # Use default exponential disteibution
-        # reject_prob = stats.expon.cdf(price, scale=1/2)
+        # Use default exponential distribution
         reject_prob = 0
         sample = random.uniform(0,1)
         if sample < reject_prob:
@@ -62,8 +60,7 @@ def choice_passenger_enter(price, mtype=None):
 def choice_passenger_accept(price, mtype=None):
     """Choice model for passenger accepting ride match. Return True if accept else return False."""
     if mtype is None:
-        # Use default exponential disteibution
-        # reject_prob = stats.expon.cdf(price, scale=1/2)
+        # Use default exponential distribution
         reject_prob = 0
         sample = random.uniform(0,1)
         if sample < reject_prob:

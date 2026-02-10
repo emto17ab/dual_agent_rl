@@ -4,7 +4,6 @@ Minimal Rebalancing Cost
 This file contains the specifications for the Min Reb Cost problem.
 """
 import os
-import math
 import subprocess
 import time
 from collections import defaultdict

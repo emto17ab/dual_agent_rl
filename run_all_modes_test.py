@@ -8,7 +8,7 @@ import re
 import sys
 
 # Configuration
-CHECKPOINT_BASE = "single_agent_nyc_man_south_v2_mode{}"
+CHECKPOINT_BASE = "single_agent_nyc_man_south_v3_mode{}"
 CITY = "nyc_man_south"
 MODEL_TYPE = "test"
 

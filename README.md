@@ -44,7 +44,6 @@ model arguments:
     --clip          vector magnitude used to clip gradient
     --no-cuda       disables CUDA training (default: True, i.e. run on CPU)
     --directory     defines directory where to log files (default: saved_files)
-    --batch_size      defines the batch size (default: 100)
     --alpha           entropy coefficient (default: 0.3)
     --p_lr            Actor learning reate (default 1e-3)
     --q_lr            Critic learning rate (default: 1e-3)

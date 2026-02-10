@@ -1,6 +1,7 @@
+from copy import deepcopy
+
 import numpy as np
 import torch.nn as nn
-from copy import deepcopy
 
 
 def mat2str(mat):
@@ -12,7 +13,7 @@ def dictsum(dic,t):
 def nestdictsum(dict):
     return sum([sum([dict[i][t] for t in dict[i]]) for i in dict])
 
-def moving_average(a, n=3) :
+def moving_average(a, n=3):
     """
     Computes a moving average used for reward trace smoothing.
     """

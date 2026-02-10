@@ -1,15 +1,15 @@
-import numpy as np
-import torch 
-from torch import nn
-import json
-from torch_geometric.data import Data
-from src.algos.layers import GNNCritic, GNNActor
-import torch.nn.functional as F
 from collections import namedtuple
+import json
+
+import numpy as np
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch_geometric.data import Data
+
+from src.algos.layers import GNNCritic, GNNActor
 from src.algos.reb_flow_solver import solveRebFlow
-from src.misc.utils import dictsum, nestdictsum
-import datetime
-import os
+from src.misc.utils import dictsum
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
 
@@ -103,47 +103,25 @@ class A2C(nn.Module):
     ):
         
         super(A2C, self).__init__()
-        # Set the environment and related attributes
         self.env = env
         self.act_dim = env.nregion
-
-        # Set the mode
         self.mode = mode
-        
-        # Store job_id for unique file naming in parallel runs
         self.job_id = job_id
-
-        # Set very small number to avoid division by zero
         self.eps = eps
-
-        # Set the input size and hidden size
         self.input_size = input_size
         self.hidden_size = hidden_size
-
-        # Specify the device
         self.device = device
 
-        # Set the Actor and Critic networks
         self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
-    
-        # Set the observation parser
         self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor, use_od_prices=use_od_prices)
 
-        # Set learning rates
         self.p_lr = p_lr
         self.q_lr = q_lr
-
-        # Inialize the optimizers
         self.optimizers = self.configure_optimizers()
 
-        # Set gamma parameter
         self.gamma = gamma
-        
-        # Reward scaling
         self.reward_scale = reward_scale
-
-        # Set gradient clipping values
         self.actor_clip = actor_clip
         self.critic_clip = critic_clip
 
@@ -160,30 +138,19 @@ class A2C(nn.Module):
     
     # Combines select action and forward steps of actor and critic
     def select_action(self, obs, deterministic=False, return_concentration=False, log_step=False, step_num=None):
-        # Parse the observation to get the graph data
         state = self.parse_obs(obs).to(self.device)
-
-        # Forward pass through actor network to get action, log probability, and concentration
         a, logprob, concentration = self.actor(state, deterministic=deterministic)
-        
-        # Forward pass through critic network to get state value estimate
         value = self.critic(state)
         
         # Only save actions for training (when not deterministic)
         if not deterministic:
-            # Store all relevant info for diagnostic logging
             self.last_concentration = concentration.detach()
             self.last_action = a.detach()
             self.last_value = value.detach()
             self.last_log_prob = logprob.detach() if logprob is not None else None
-            
-            # Track concentration for episode-level statistics
             self.concentration_history.append(concentration.detach().cpu().numpy())
-            
-            # Save action for training
             self.saved_actions.append(SavedAction(logprob, value))
     
-        # Convert to numpy array
         action_np = a.detach().cpu().numpy()
         
         # Handle different action shapes based on mode:
@@ -282,10 +249,7 @@ class A2C(nn.Module):
         }
 
     def configure_optimizers(self):
-        # Define dictionary to hold the optimizers
         optimizers = dict()
-
-        # Define the optimizers for actor and critic
         actor_params = list(self.actor.parameters())
         critic_params = list(self.critic.parameters())
         optimizers["a_optimizer"] = torch.optim.Adam(actor_params, lr=self.p_lr)

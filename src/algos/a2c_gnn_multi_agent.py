@@ -1,13 +1,13 @@
-import numpy as np
-import torch 
-from torch import nn
-import json
-from torch_geometric.data import Data
-from src.algos.layers import GNNCritic, GNNActor
-import torch.nn.functional as F
 from collections import namedtuple
-from src.algos.reb_flow_solver import solveRebFlow
-from src.misc.utils import dictsum, nestdictsum
+import json
+
+import numpy as np
+import torch
+from torch import nn
+import torch.nn.functional as F
+from torch_geometric.data import Data
+
+from src.algos.layers import GNNCritic, GNNActor
 
 SavedAction = namedtuple('SavedAction', ['log_prob', 'value'])
 
@@ -44,7 +44,6 @@ class GNNParser:
         queue_length = torch.tensor([len(self.env.agent_queue[self.agent_id][n]) * self.s for n in self.env.region]).view(1, 1, self.env.nregion).float()
 
         # Current demand at t
-        ############# LOOOK AT THIS. SHOULD IT USE DEMAND from OBS OR self.env.demand ##########################
         current_demand = torch.tensor([sum([(demand[i, j][time])* self.s for j in self.env.region]) for i in self.env.region]).view(1, 1, self.env.nregion).float()
 
         # Price features (conditional on use_od_prices)
@@ -168,51 +167,29 @@ class A2C(nn.Module):
     ):
         
         super(A2C, self).__init__()
-        # Set the environment and related attributes
         self.env = env
         self.act_dim = env.nregion
         self.agent_id = agent_id
         self.od_price_actions = od_price_actions
-
-        # Set the mode
         self.mode = mode
-
-        # Set very small number to avoid division by zero
         self.eps = eps
-
-        # Set the input size and hidden size
         self.input_size = input_size
         self.hidden_size = hidden_size
-
-        # Specify the device
         self.device = device
 
-        # Set the Actor and Critic networks
         self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode, od_price_actions=od_price_actions)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
-    
-        # Set the observation parser
         self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor,
                                    agent_id=agent_id, use_od_prices=use_od_prices, no_share_info=no_share_info)
 
-        # Set learning rates
         self.p_lr = p_lr
         self.q_lr = q_lr
-
-        # Inialize the optimizers
         self.optimizers = self.configure_optimizers()
 
-        # Set gamma parameter
         self.gamma = gamma
-
-        # Set gradient clipping values
         self.actor_clip = actor_clip
         self.critic_clip = critic_clip
-        
-        # Reward scaling
         self.reward_scale = reward_scale
-        
-        # Episode counter
         self.current_episode = 0
 
         # Action & reward buffer
@@ -228,29 +205,23 @@ class A2C(nn.Module):
     
     # Combines select action and forward steps of actor and critic
     def select_action(self, obs, deterministic=False, return_concentration=False):
-        # Parse the observation to get the graph data
         state = self.parse_obs(obs).to(self.device)
-
-        # Forward pass through actor network to get action, log probability, and concentration
         a, logprob, concentration = self.actor(state, deterministic=deterministic)
-        
-        # Forward pass through critic network to get state value estimate
         value = self.critic(state)
         
         # Only save actions for training (when not deterministic)
         if not deterministic:
-            # Store all relevant info for diagnostic logging
-            self.last_concentration = concentration.detach()
+            if isinstance(concentration, dict):
+                self.last_concentration = {k: v.detach() for k, v in concentration.items()}
+                self.concentration_history.append({k: v.detach().cpu().numpy() for k, v in concentration.items()})
+            else:
+                self.last_concentration = concentration.detach()
+                self.concentration_history.append(concentration.detach().cpu().numpy())
             self.last_action = a.detach()
             self.last_value = value.detach()
             self.last_log_prob = logprob.detach() if logprob is not None else None
-            
-            # Track concentration for episode-level statistics
-            self.concentration_history.append(concentration.detach().cpu().numpy())
-            
             self.saved_actions.append(SavedAction(logprob, value))
     
-        # Convert to numpy array
         action_np = a.detach().cpu().numpy()
         
         # Handle different action shapes based on mode and od_price_actions:
@@ -275,7 +246,11 @@ class A2C(nn.Module):
         
         # Return the action and optionally concentration parameter and log probability
         if return_concentration:
-            concentration_value = concentration.detach().cpu().numpy()
+            if isinstance(concentration, dict):
+                # Mode 2 OD: concentration is {'beta': tensor, 'dirichlet': tensor}
+                concentration_value = {k: v.detach().cpu().numpy() for k, v in concentration.items()}
+            else:
+                concentration_value = concentration.detach().cpu().numpy()
             logprob_value = logprob.item() if logprob is not None else None
             return action_array, concentration_value, logprob_value
         else:
@@ -289,7 +264,6 @@ class A2C(nn.Module):
         returns = [] # list to save the true values
 
         # Normalize rewards (same as single agent)
-        #scaled_rewards = [(r - np.mean(self.rewards)) / (np.std(self.rewards) + self.eps) for r in self.rewards]
         scaled_rewards = self.rewards
 
         # calculate the true value using scaled rewards
@@ -360,10 +334,7 @@ class A2C(nn.Module):
         }
     
     def configure_optimizers(self):
-        # Define dictionary to hold the optimizers
         optimizers = dict()
-
-        # Define the optimizers for actor and critic
         actor_params = list(self.actor.parameters())
         critic_params = list(self.critic.parameters())
         optimizers["a_optimizer"] = torch.optim.Adam(actor_params, lr=self.p_lr)

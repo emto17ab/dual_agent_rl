@@ -1,22 +1,23 @@
 import argparse
-import torch
-from src.envs.amod_env import Scenario, AMoD
-from src.algos.a2c_gnn import A2C
-from tqdm import trange
+import copy
+import os
+import pickle
+
 import numpy as np
-from src.misc.utils import dictsum, nestdictsum
-import copy, os
-from src.algos.reb_flow_solver import solveRebFlow
-import json, pickle
+import torch
 import wandb
 from dotenv import load_dotenv
+from tqdm import trange
+
+from src.algos.a2c_gnn import A2C
+from src.algos.reb_flow_solver import solveRebFlow
+from src.envs.amod_env import Scenario, AMoD
+from src.misc.utils import dictsum, nestdictsum
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Define calibrated simulation parameters
-
-# Define calibrated simulation parameters
+# Calibrated simulation parameters
 demand_ratio = {'san_francisco': 2,'nyc_man_south': 1.0, 'nyc_brooklyn': 9, 'washington_dc': 4.2}
 
 json_hr = {'san_francisco':19,'nyc_man_south': 19, 'nyc_brooklyn': 19, 'washington_dc': 19}
@@ -110,12 +111,6 @@ parser.add_argument(
     help="Enables CUDA training",
 )
 
-parser.add_argument(
-    "--batch_size",
-    type=int,
-    default=100,
-    help="batch size for training (default: 100)",
-)
 parser.add_argument(
     "--jitter",
     type=int,
@@ -276,19 +271,18 @@ args = parser.parse_args()
 args.cuda = args.cuda and torch.cuda.is_available()
 device = torch.device("cuda" if args.cuda else "cpu")
 
-# Set up weights and biases
-wandb.login(key=os.getenv('WANDB_API_KEY'))
-
-run = wandb.init(
-    project="thesis",
-    name=args.checkpoint_path,
-    config=args,
-)
-
 # Set city
 city = args.city
 
 if not args.test:
+    # Set up weights and biases
+    wandb.login(key=os.getenv('WANDB_API_KEY'))
+    wandb.init(
+        project="thesis",
+        name=args.checkpoint_path,
+        config=args,
+    )
+
     # Create the scenario
     scenario = Scenario(
                 json_file=f"data/scenario_{city}.json",
@@ -393,9 +387,6 @@ if not args.test:
     epoch_waiting_list = []
     epoch_servedrate_list = []
     epoch_rebalancing_cost = []
-    epoch_value1_list = []
-    epoch_value2_list = []
-
     price_history = []
 
     # Get initial vehicles
@@ -631,24 +622,11 @@ if not args.test:
             if not args.fix_baseline:
                 actions.append(action_rl)
             
-            # Track price scalar for modes 1, 2, 3, and 4
-            if args.mode == 1:
-                if args.fix_baseline:
-                    # Mode 1: action_rl is array of price scalars (all 0.5)
-                    actions_price.append(np.mean(2 * np.array(action_rl)))
-                else:
-                    # Mode 1: action_rl is just the price scalar for each region
-                    actions_price.append(np.mean(2 * np.array(action_rl)))
-            elif args.mode == 2:
-                if args.fix_baseline:
-                    # Mode 2: action_rl[:, 0] contains price scalars (all 0.5)
-                    actions_price.append(np.mean(2 * np.array(action_rl)[:, 0]))
-                else:
-                    # Mode 2: action_rl[i][0] is the price scalar, action_rl[i][-1] is the rebalancing
-                    actions_price.append(np.mean(2 * np.array(action_rl)[:, 0]))
-            elif args.mode in [3, 4]:
-                # Mode 3 and 4: Fixed price scalar of 0.5 (base price = 1.0)
+            # Track mean price scalar (modes 1-4)
+            if args.mode in [1, 3, 4]:
                 actions_price.append(np.mean(2 * np.array(action_rl)))
+            elif args.mode == 2:
+                actions_price.append(np.mean(2 * np.array(action_rl)[:, 0]))
 
             step += 1
 
@@ -807,7 +785,6 @@ if not args.test:
         os.makedirs(metricPath)
     np.save(f"{args.directory}/train_logs/{city}_rewards_waiting_mode{args.mode}_{train_episodes}.npy", np.array([epoch_reward_list,epoch_waiting_list,epoch_servedrate_list,epoch_demand_list,epoch_rebalancing_cost]))
     np.save(f"{args.directory}/train_logs/{city}_price_mode{args.mode}_{train_episodes}.npy", np.array(price_history))
-    np.save(f"{args.directory}/train_logs/{city}_q_mode{args.mode}_{train_episodes}.npy", np.array([epoch_value1_list,epoch_value2_list]))
 
     export["avail_distri"] = env.acc
     export["demand_scaled"] = env.demand

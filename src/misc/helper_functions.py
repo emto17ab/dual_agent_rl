@@ -1,5 +1,3 @@
-import numpy as np
-
 def demand_update(d_ori, p, ph, pf, jitter=0):
     """ 
     Update demand by price. Special cases: if the price and demand are both 0, return 0; 
