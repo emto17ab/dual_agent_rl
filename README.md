@@ -77,7 +77,7 @@ simulator arguments:
     --city              city to train on (default: nyc_man_south)
     --supply_ratio      supply scaling factor (default: 1.0)
     --jitter            demand jitter (default: 1)
-    --maxt              maximum passenger waiting time in minutes (default: 2)
+    --maxt              maximum passenger waiting time in time steps (default: 2)
 
 model arguments:
     --test              activates agent evaluation mode (default: False)

@@ -116,11 +116,12 @@ parser.add_argument(
     default=1,
     help="jitter for demand 0 (default: 1)",
 )
+
 parser.add_argument(
     "--maxt",
     type=int,
     default=2,
-    help="maximum passenger waiting time (default: 2mins)",
+    help="maximum passenger waiting time in time steps (default: 2)",
 )
 
 parser.add_argument(
