@@ -111,7 +111,7 @@ model arguments:
     --total_vehicles        total number of vehicles; if None, reads from dataset (default: None)
     --fix_agent             fix agent behaviour for testing: 0=fix agent 0, 1=fix agent 1, 2=none (default: 2)
     --od_price_actions      use OD-based price scalars (N×N) instead of origin-based (N) (default: False)
-    --no_share_info         don't share competitor pricing info between agents (default: False)
+    --no_share_info         do not share competitor pricing info between agents (default: False)
     --use_dynamic_wage_man_south  enable region-specific wage distributions for NYC Manhattan South (default: False)
 ```
 
@@ -121,8 +121,6 @@ Windows: "C:/Program Files/ibm/ILOG/CPLEX_Studio1210/opl/bin/x64_win64/"
 macOS:   "/Applications/CPLEX_Studio1210/opl/bin/x86-64_osx/"
 Linux:   "/opt/ibm/ILOG/CPLEX_Studio1210/opl/bin/x86-64_linux/"
 ```
-
-**Note:** The number of CPLEX solver threads is set to **6** in `src/cplex_mod/minRebDistRebOnly.mod` (`cplex.threads = 6`). Adjust this value to match the number of available CPU cores on your machine.
 
 ### Training
 
