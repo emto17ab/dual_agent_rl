@@ -52,6 +52,8 @@ mkdir -p saved_files ckpt logs
 * `src/cplex_mod/`: CPLEX `.mod` formulations for rebalancing and matching problems.
 * `src/misc/`: Helper and utility functions.
 * `data/`: Scenario JSON files and calibration data for supported cities.
+* `nyc_man_south_reb_flow_operator_0.html`: Interactive Kepler.gl map of learned rebalancing flows for Operator 0 (NYC Manhattan South, joint policy).
+* `nyc_man_south_reb_flow_operator_1.html`: Interactive Kepler.gl map of learned rebalancing flows for Operator 1 (NYC Manhattan South, joint policy).
 
 ### Supported Cities
 
