@@ -1,6 +1,6 @@
-# Multi-Agent Graph-RL for Competitive Pricing and Rebalancing in AMoD
+# Competititve Multi-Operator Reinforcement Learning for Joint Pricing and Fleet Rebalancing in Autonomous Mobility-on-Demand Systems
 
-Implementation of A2C-based Graph Neural Network agents for joint rebalancing and dynamic pricing in Autonomous Mobility-on-Demand (AMoD) systems, supporting both single-agent and competitive multi-agent settings.
+Implementation of A2C-based Graph Convolutional Network operators for joint rebalancing and dynamic pricing in Autonomous Mobility-on-Demand (AMoD) systems, supporting both single-agent and competitive multi-agent settings.
 
 ## Prerequisites
 
