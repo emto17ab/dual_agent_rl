@@ -101,7 +101,7 @@ model arguments:
     --load              start training from checkpoint (default: False)
     --cuda              enable CUDA training (default: False)
     --directory         directory for intermediate files (default: saved_files)
-    --observe_od_prices use OD price matrices for observations (default: False)
+    --od_price_observe  use OD price matrices for observations (default: False)
 ```
 
 #### Multi-agent specific arguments (`main_a2c_multi_agent.py` only):

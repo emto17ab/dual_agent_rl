@@ -235,7 +235,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--observe_od_prices",
+    "--od_price_observe",
     action="store_true",
     default=False,
     help="Use OD price matrices instead of aggregated prices per region (default: False)",
@@ -326,7 +326,7 @@ if not args.test:
     # Only create model if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
         # Calculate input size based on price type
-        if args.observe_od_prices:
+        if args.od_price_observe:
             # OD price matrices: T (future) + 3 (current_avb, queue, demand) + 2*nregion (own and competitor OD prices)
             input_size = args.look_ahead + 3 + env.nregion
         else:
@@ -348,7 +348,7 @@ if not args.test:
                 actor_clip=args.actor_clip,
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
-                observe_od_prices=args.observe_od_prices,
+                observe_od_prices=args.od_price_observe,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )
@@ -800,7 +800,7 @@ else:
     # Only create model if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
         # Calculate input size based on price type
-        if args.observe_od_prices:
+        if args.od_price_observe:
             # OD price matrices: T (future) + 3 (current_avb, queue, demand) + 2*nregion (own and competitor OD prices)
             input_size = args.look_ahead + 3 + env.nregion
         else:
@@ -822,7 +822,7 @@ else:
                 actor_clip=args.actor_clip,
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
-                observe_od_prices=args.observe_od_prices,
+                observe_od_prices=args.od_price_observe,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )

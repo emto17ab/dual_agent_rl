@@ -1029,25 +1029,25 @@ class Scenario:
                         fleet_agent1 = total_fleet - fleet_agent0
                     
             # Create list of nodes and shuffle for random remainder assignment
-                    nodes_list = list(self.G.nodes)
-                    random.seed(sd)  # Use scenario seed for reproducibility
-                    random.shuffle(nodes_list)
-                    num_nodes = len(nodes_list)
-                    
-                    # Distribute agent 0's fleet
-                    base_vehicles_agent0 = fleet_agent0 // num_nodes
-                    remainder_agent0 = fleet_agent0 % num_nodes
-                    
-                    # Distribute agent 1's fleet
-                    base_vehicles_agent1 = fleet_agent1 // num_nodes
-                    remainder_agent1 = fleet_agent1 % num_nodes
-                    
-                    # Assign vehicles to each node for both agents
-                    for idx, n in enumerate(nodes_list):
-                        vehicles_agent0 = base_vehicles_agent0 + (1 if idx < remainder_agent0 else 0)
-                        vehicles_agent1 = base_vehicles_agent1 + (1 if idx < remainder_agent1 else 0)
-                        self.G.nodes[n]['accInit_agent0'] = vehicles_agent0
-                        self.G.nodes[n]['accInit_agent1'] = vehicles_agent1
+            nodes_list = list(self.G.nodes)
+            random.seed(sd)  # Use scenario seed for reproducibility
+            random.shuffle(nodes_list)
+            num_nodes = len(nodes_list)
+            
+            # Distribute agent 0's fleet
+            base_vehicles_agent0 = fleet_agent0 // num_nodes
+            remainder_agent0 = fleet_agent0 % num_nodes
+            
+            # Distribute agent 1's fleet
+            base_vehicles_agent1 = fleet_agent1 // num_nodes
+            remainder_agent1 = fleet_agent1 % num_nodes
+            
+            # Assign vehicles to each node for both agents
+            for idx, n in enumerate(nodes_list):
+                vehicles_agent0 = base_vehicles_agent0 + (1 if idx < remainder_agent0 else 0)
+                vehicles_agent1 = base_vehicles_agent1 + (1 if idx < remainder_agent1 else 0)
+                self.G.nodes[n]['accInit_agent0'] = vehicles_agent0
+                self.G.nodes[n]['accInit_agent1'] = vehicles_agent1
 
 
             self.tripAttr = self.get_random_demand()
