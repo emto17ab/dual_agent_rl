@@ -242,6 +242,13 @@ parser.add_argument(
 )
 
 parser.add_argument(
+    "--od_price_actions",
+    action="store_true",
+    default=False,
+    help="Use OD-based price scalars (N×N outputs) instead of origin-based (N outputs) (default: False)",
+)
+
+parser.add_argument(
     "--reward_scalar",
     type=float,
     default=2000.0,
@@ -257,6 +264,14 @@ parser.add_argument(
 
 # Parser arguments
 args = parser.parse_args()
+
+# Automatically enable od_price_observe when od_price_actions is True
+if args.od_price_actions and not args.od_price_observe:
+    print("=" * 80)
+    print("INFO: Automatically enabling --od_price_observe since --od_price_actions is set")
+    print("      (OD-based actions require OD-based observations)")
+    print("=" * 80)
+    args.od_price_observe = True
 
 # Set device
 args.cuda = args.cuda and torch.cuda.is_available()
@@ -286,7 +301,7 @@ if not args.test:
                 supply_ratio=args.supply_ratio)
 
     # Create the environment
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city])
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city], od_price_actions=args.od_price_actions)
     
     # Print baseline information
     if args.fix_baseline:
@@ -349,6 +364,7 @@ if not args.test:
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
                 observe_od_prices=args.od_price_observe,
+                od_price_actions=args.od_price_actions,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )
@@ -468,7 +484,10 @@ if not args.test:
                 # Select action for pricing
                 if args.fix_baseline:
                     # Fixed baseline: use price scalar of 0.5 (keeps base price)
-                    action_rl = np.array([0.5] * env.nregion)
+                    if args.od_price_actions:
+                        action_rl = np.full((env.nregion, env.nregion), 0.5)
+                    else:
+                        action_rl = np.array([0.5] * env.nregion)
                 else:
                     action_rl, concentration, logprob = model.select_action(obs, return_concentration=True)
                     episode_concentrations.append(concentration)
@@ -478,10 +497,8 @@ if not args.test:
 
             elif env.mode == 2:
                 # Perform matching with the pricing action (from previous iteration or None for first)
-                # Extract pricing action (first column) if action_rl exists
-                pricing_action = action_rl[:, 0] if action_rl is not None else None
-                    
-                obs, paxreward, done, info, system_info, _, _ = env.match_step_simple(pricing_action)
+                # Pass the full action - env handles extracting pricing based on od_price_actions
+                obs, paxreward, done, info, system_info, _, _ = env.match_step_simple(action_rl)
 
                 episode_reward += paxreward
                 
@@ -489,16 +506,23 @@ if not args.test:
                 # This matches the multi-agent flow
                 if args.fix_baseline:
                     # Fixed baseline: create action with price scalar 0.5 and uniform rebalancing
-                    # Mode 2 action shape: [nregion, 2] where [:, 0] = price scalar, [:, 1] = reb action
                     total_vehicles = sum(env.initial_acc.values())
                     reb_action_prop = np.array([
                         env.initial_acc[env.region[i]] / total_vehicles 
                         for i in range(env.nregion)
                     ])
-                    action_rl = np.column_stack([
-                        np.array([0.5] * env.nregion),  # Price scalar = 0.5 (base price)
-                        reb_action_prop  # Rebalancing proportions from initial distribution
-                    ])
+                    if args.od_price_actions:
+                        # OD Mode 2 action shape: [nregion, nregion+1] where [:, :nregion] = OD prices, [:, -1] = reb
+                        action_rl = np.column_stack([
+                            np.full((env.nregion, env.nregion), 0.5),  # OD prices
+                            reb_action_prop.reshape(-1, 1)  # Rebalancing
+                        ])
+                    else:
+                        # Origin Mode 2 action shape: [nregion, 2] where [:, 0] = price scalar, [:, 1] = reb action
+                        action_rl = np.column_stack([
+                            np.array([0.5] * env.nregion),  # Price scalar = 0.5 (base price)
+                            reb_action_prop  # Rebalancing proportions from initial distribution
+                        ])
                 else:
                     action_rl, concentration, logprob = model.select_action(obs, return_concentration=True)
                     episode_concentrations.append(concentration)
@@ -617,7 +641,10 @@ if not args.test:
             if args.mode in [1, 3, 4]:
                 actions_price.append(np.mean(2 * np.array(action_rl)))
             elif args.mode == 2:
-                actions_price.append(np.mean(2 * np.array(action_rl)[:, 0]))
+                if args.od_price_actions:
+                    actions_price.append(np.mean(2 * np.array(action_rl)[:, :env.nregion]))
+                else:
+                    actions_price.append(np.mean(2 * np.array(action_rl)[:, 0]))
 
             step += 1
 
@@ -698,14 +725,12 @@ if not args.test:
         
         # Add concentration parameters and log probabilities tracking (skip baseline modes)
         if args.mode not in [3, 4] and not args.fix_baseline and len(episode_concentrations) > 0:
-            # Stack all concentrations across the episode
-            concentrations_array = np.array(episode_concentrations)  # Shape: [num_steps, batch, nregion, n_params]
-            
             # Mean log probability across the episode
             log_dict["training/mean_log_prob"] = np.mean(episode_logprobs)
             
             if args.mode == 0:
                 # Mode 0: Dirichlet - shape [batch, nregion, 1]
+                concentrations_array = np.array(episode_concentrations)
                 # Track mean concentration (alpha) per region
                 mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, 1] -> [nregion]
                 for region_idx in range(env.nregion):
@@ -714,28 +739,47 @@ if not args.test:
                 log_dict["concentration/mean_alpha"] = mean_concentrations.mean()
                 
             elif args.mode == 1:
-                # Mode 1: Beta - shape [batch, nregion, 2]
-                # Track mean alpha and beta per region
-                mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, 2]
-                for region_idx in range(env.nregion):
-                    log_dict[f"concentration/region_{region_idx}_alpha"] = mean_concentrations[region_idx, 0]
-                    log_dict[f"concentration/region_{region_idx}_beta"] = mean_concentrations[region_idx, 1]
-                # Track overall means
-                log_dict["concentration/mean_alpha"] = mean_concentrations[:, 0].mean()
-                log_dict["concentration/mean_beta"] = mean_concentrations[:, 1].mean()
+                if args.od_price_actions:
+                    # Mode 1 OD: Beta - shape [steps, 1, nregion, nregion, 2]
+                    concentrations_array = np.array(episode_concentrations)
+                    mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, nregion, 2]
+                    log_dict["concentration/mean_alpha"] = mean_concentrations[:, :, 0].mean()
+                    log_dict["concentration/mean_beta"] = mean_concentrations[:, :, 1].mean()
+                else:
+                    # Mode 1: Beta - shape [batch, nregion, 2]
+                    concentrations_array = np.array(episode_concentrations)
+                    # Track mean alpha and beta per region
+                    mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, 2]
+                    for region_idx in range(env.nregion):
+                        log_dict[f"concentration/region_{region_idx}_alpha"] = mean_concentrations[region_idx, 0]
+                        log_dict[f"concentration/region_{region_idx}_beta"] = mean_concentrations[region_idx, 1]
+                    # Track overall means
+                    log_dict["concentration/mean_alpha"] = mean_concentrations[:, 0].mean()
+                    log_dict["concentration/mean_beta"] = mean_concentrations[:, 1].mean()
                 
             elif args.mode == 2:
-                # Mode 2: Beta + Dirichlet - shape [batch, nregion, 3]
-                # Track pricing (alpha, beta) and rebalancing (alpha_reb) per region
-                mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, 3]
-                for region_idx in range(env.nregion):
-                    log_dict[f"concentration/region_{region_idx}_price_alpha"] = mean_concentrations[region_idx, 0]
-                    log_dict[f"concentration/region_{region_idx}_price_beta"] = mean_concentrations[region_idx, 1]
-                    log_dict[f"concentration/region_{region_idx}_reb_alpha"] = mean_concentrations[region_idx, 2]
-                # Track overall means
-                log_dict["concentration/mean_price_alpha"] = mean_concentrations[:, 0].mean()
-                log_dict["concentration/mean_price_beta"] = mean_concentrations[:, 1].mean()
-                log_dict["concentration/mean_reb_alpha"] = mean_concentrations[:, 2].mean()
+                if args.od_price_actions:
+                    # Mode 2 OD: concentrations are dicts {'beta': [1, N, N, 2], 'dirichlet': [1, N, 1]}
+                    beta_arrays = np.array([c['beta'] for c in episode_concentrations])
+                    dirichlet_arrays = np.array([c['dirichlet'] for c in episode_concentrations])
+                    mean_beta = beta_arrays.mean(axis=0).squeeze()  # [N, N, 2]
+                    mean_dirichlet = dirichlet_arrays.mean(axis=0).squeeze()  # [N]
+                    log_dict["concentration/mean_price_alpha"] = mean_beta[:, :, 0].mean()
+                    log_dict["concentration/mean_price_beta"] = mean_beta[:, :, 1].mean()
+                    log_dict["concentration/mean_reb_alpha"] = mean_dirichlet.mean()
+                else:
+                    # Mode 2: Beta + Dirichlet - shape [batch, nregion, 3]
+                    concentrations_array = np.array(episode_concentrations)
+                    # Track pricing (alpha, beta) and rebalancing (alpha_reb) per region
+                    mean_concentrations = concentrations_array.mean(axis=0).squeeze()  # [nregion, 3]
+                    for region_idx in range(env.nregion):
+                        log_dict[f"concentration/region_{region_idx}_price_alpha"] = mean_concentrations[region_idx, 0]
+                        log_dict[f"concentration/region_{region_idx}_price_beta"] = mean_concentrations[region_idx, 1]
+                        log_dict[f"concentration/region_{region_idx}_reb_alpha"] = mean_concentrations[region_idx, 2]
+                    # Track overall means
+                    log_dict["concentration/mean_price_alpha"] = mean_concentrations[:, 0].mean()
+                    log_dict["concentration/mean_price_beta"] = mean_concentrations[:, 1].mean()
+                    log_dict["concentration/mean_reb_alpha"] = mean_concentrations[:, 2].mean()
         
         wandb.log(log_dict)
 
@@ -795,7 +839,7 @@ else:
                 supply_ratio=args.supply_ratio)
     
     # Create the environment
-    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city])
+    env = AMoD(scenario, args.mode, beta=beta[city], jitter=args.jitter, max_wait=args.maxt, choice_price_mult=args.choice_price_mult, seed = args.seed, fix_baseline=args.fix_baseline, choice_intercept=choice_intercept[city], wage=wage[city], od_price_actions=args.od_price_actions)
 
     # Only create model if not in baseline mode (mode 3 or 4)
     if args.mode not in [3, 4]:
@@ -823,6 +867,7 @@ else:
                 critic_clip=args.critic_clip,
                 gamma=args.gamma,
                 observe_od_prices=args.od_price_observe,
+                od_price_actions=args.od_price_actions,
                 reward_scale=args.reward_scalar,
                 job_id=args.checkpoint_path
             )
@@ -1017,7 +1062,10 @@ else:
             if args.mode == 1:
                 actions_price.append(np.mean(2*np.array(action_rl)))
             elif args.mode == 2:
-                actions_price.append(np.mean(2*np.array(action_rl)[:,0]))
+                if args.od_price_actions:
+                    actions_price.append(np.mean(2*np.array(action_rl)[:, :env.nregion]))
+                else:
+                    actions_price.append(np.mean(2*np.array(action_rl)[:,0]))
             elif args.mode in [3, 4]:
                 # Mode 3 and 4: Fixed price scalar of 0.5 (base price = 1.0)
                 actions_price.append(np.mean(2*np.array(action_rl)))

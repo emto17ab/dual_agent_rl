@@ -97,6 +97,7 @@ class A2C(nn.Module):
         scale_factor,
         json_file = None,
         observe_od_prices = False,
+        od_price_actions = False,  # whether to use OD-based price actions
         reward_scale = 0.00005,  # reward scaling factor
         eps=np.finfo(np.float32).eps.item(),
         job_id = None  # unique identifier for this model instance
@@ -106,13 +107,14 @@ class A2C(nn.Module):
         self.env = env
         self.act_dim = env.nregion
         self.mode = mode
+        self.od_price_actions = od_price_actions
         self.job_id = job_id
         self.eps = eps
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.device = device
 
-        self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode)
+        self.actor = GNNActor(self.input_size, self.hidden_size, act_dim=self.act_dim, mode=mode, od_price_actions=od_price_actions)
         self.critic = GNNCritic(self.input_size, self.hidden_size, act_dim=self.act_dim)
         self.obs_parser = GNNParser(self.env, T=T, json_file=json_file, scale_factor=scale_factor, observe_od_prices=observe_od_prices)
 
@@ -144,28 +146,41 @@ class A2C(nn.Module):
         
         # Only save actions for training (when not deterministic)
         if not deterministic:
-            self.last_concentration = concentration.detach()
+            if isinstance(concentration, dict):
+                self.last_concentration = {k: v.detach() for k, v in concentration.items()}
+                self.concentration_history.append({k: v.detach().cpu().numpy() for k, v in concentration.items()})
+            else:
+                self.last_concentration = concentration.detach()
+                self.concentration_history.append(concentration.detach().cpu().numpy())
             self.last_action = a.detach()
             self.last_value = value.detach()
             self.last_log_prob = logprob.detach() if logprob is not None else None
-            self.concentration_history.append(concentration.detach().cpu().numpy())
             self.saved_actions.append(SavedAction(logprob, value))
     
         action_np = a.detach().cpu().numpy()
         
-        # Handle different action shapes based on mode:
-        # Mode 0 & 1: shape [nregion, 1] -> flatten to [nregion]
-        # Mode 2: shape [nregion, 2] -> keep as 2D [[price, reb], ...]
-        if action_np.shape[-1] == 1:
-            # Mode 0 or 1: squeeze last dimension to get 1D array
-            action_array = action_np.squeeze(-1)
-        else:
-            # Mode 2: return 2D array as-is
+        # Handle different action shapes based on mode and od_price_actions:
+        # Mode 0: [nregion] -> 1D array
+        # Mode 1 origin: [nregion] -> 1D array
+        # Mode 1 OD: [nregion, nregion] -> 2D array
+        # Mode 2 origin: [nregion, 2] -> 2D array [[price, reb], ...]
+        # Mode 2 OD: [nregion, nregion+1] -> 2D array [[OD prices..., reb], ...]
+        if self.mode == 0:
             action_array = action_np
+        elif self.mode == 1:
+            if self.od_price_actions:
+                action_array = action_np  # [nregion, nregion]
+            else:
+                action_array = action_np.squeeze(-1) if action_np.ndim > 1 and action_np.shape[-1] == 1 else action_np  # [nregion]
+        else:
+            action_array = action_np  # [nregion, 2] or [nregion, nregion+1]
         
         # Return the action and optionally concentration parameter and log probability
         if return_concentration:
-            concentration_value = concentration.detach().cpu().numpy()
+            if isinstance(concentration, dict):
+                concentration_value = {k: v.detach().cpu().numpy() for k, v in concentration.items()}
+            else:
+                concentration_value = concentration.detach().cpu().numpy()
             logprob_value = logprob.item() if logprob is not None else None
             return action_array, concentration_value, logprob_value
         else:

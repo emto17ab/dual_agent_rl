@@ -102,6 +102,7 @@ model arguments:
     --cuda              enable CUDA training (default: False)
     --directory         directory for intermediate files (default: saved_files)
     --od_price_observe  use OD price matrices for observations (default: False)
+    --od_price_actions  use OD-based price scalars (N×N) instead of origin-based (N) (default: False)
 ```
 
 #### Multi-agent specific arguments (`main_a2c_multi_agent.py` only):
@@ -110,7 +111,6 @@ model arguments:
     --agent0_vehicle_ratio  proportion of vehicles for agent 0 (default: 0.5, range: 0.0–1.0)
     --total_vehicles        total number of vehicles; if None, reads from dataset (default: None)
     --fix_agent             fix agent behaviour for testing: 0=fix agent 0, 1=fix agent 1, 2=none (default: 2)
-    --od_price_actions      use OD-based price scalars (N×N) instead of origin-based (N) (default: False)
     --no_share_info         do not share competitor pricing info between agents (default: False)
     --use_dynamic_wage_man_south  enable region-specific wage distributions for NYC Manhattan South (default: False)
 ```
@@ -128,6 +128,11 @@ Linux:   "/opt/ibm/ILOG/CPLEX_Studio1210/opl/bin/x86-64_linux/"
 Train a single agent for the joint rebalancing + pricing policy:
 ```bash
 python main_a2c.py --city nyc_man_south --mode 2 --checkpoint_path my_single_agent
+```
+
+With OD-level price actions and observations:
+```bash
+python main_a2c.py --city nyc_man_south --mode 2 --od_price_actions --checkpoint_path my_single_agent_od
 ```
 
 #### Multi-agent training

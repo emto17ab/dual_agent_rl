@@ -16,12 +16,13 @@ from src.envs.structures import generate_passenger
 
 
 class AMoD:
-    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, choice_intercept, fix_baseline=False, wage=25):
+    def __init__(self, scenario, mode, beta, jitter, max_wait, choice_price_mult, seed, choice_intercept, fix_baseline=False, wage=25, od_price_actions=False):
         self.scenario = deepcopy(scenario)
         self.mode = mode  # Mode of rebalancing (0:manul, 1:pricing, 2:both. default 1)
         self.jitter = jitter # Jitter for zero demand
         self.max_wait = max_wait # Maximum passenger waiting time
         self.fix_baseline = fix_baseline  # Fix baseline behavior (base price + initial distribution)
+        self.od_price_actions = od_price_actions  # Use OD-based price scalars (N×N) instead of origin-based (N)
         # Choice model intercept (utility of using ridehailing service)
         self.choice_intercept = choice_intercept
         # Wage parameter for choice model
@@ -133,17 +134,26 @@ class AMoD:
         # Check condition once instead of for every (n,j) edge pair
         price_scalars = None
         if price is not None and np.sum(price) != 0:
-            # Pre-extract price scalars once per region (not per edge)
-            # Reduces isinstance() calls from O(edges) to O(regions)
+            # Pre-extract price scalars
             price_scalars = {}
-            for n in self.region:
-                if self.fix_baseline:
-                    price_scalars[n] = 0.5
-                else:
-                    scalar = price[n]
-                    if isinstance(scalar, (list, np.ndarray)):
-                        scalar = scalar[0]
-                    price_scalars[n] = scalar
+            if self.od_price_actions:
+                # OD-based: extract per (origin, destination) price scalars
+                for n in self.region:
+                    for j in self.G[n]:
+                        if self.fix_baseline:
+                            price_scalars[(n, j)] = 0.5
+                        else:
+                            price_scalars[(n, j)] = float(price[n][j])
+            else:
+                # Origin-based: extract per-region price scalars
+                for n in self.region:
+                    if self.fix_baseline:
+                        price_scalars[n] = 0.5
+                    else:
+                        scalar = price[n]
+                        if isinstance(scalar, (list, np.ndarray)):
+                            scalar = scalar[0]
+                        price_scalars[n] = scalar
         
         for n in self.region:
             for j in self.G[n]:
@@ -153,7 +163,10 @@ class AMoD:
                 # Inner loop now just does cheap dict lookup instead of condition checks
                 if price_scalars is not None:
                     baseline_price = self.price[n, j][t]
-                    price_scalar = price_scalars[n]
+                    if self.od_price_actions:
+                        price_scalar = price_scalars[(n, j)]
+                    else:
+                        price_scalar = price_scalars[n]
                     
                     # Calculate proposed price (multiply by 2 to allow range [0, 2×baseline])
                     p = 2 * baseline_price * price_scalar
