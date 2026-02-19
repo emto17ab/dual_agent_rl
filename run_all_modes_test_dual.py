@@ -8,9 +8,9 @@ import re
 import sys
 
 # Configuration
-CHECKPOINT_BASE = "dual_agent_nyc_man_south_v2_mode{}"
+CHECKPOINT_BASE = "dual_nyc_man_south_paper_mode{}"
 CITY = "nyc_man_south"
-MODEL_TYPE = "running"
+MODEL_TYPE = "test"
 
 # Metrics to collect for Combined totals (in order for the table)
 METRIC_PATTERNS = {
@@ -46,7 +46,7 @@ def run_mode(mode):
     
     # Build the command
     cmd = [
-        "python", "main_a2c_multi_agent.py",
+        sys.executable, "main_a2c_multi_agent.py",
         "--test",
         "--mode", str(mode),
         "--city", CITY,
@@ -101,7 +101,7 @@ def format_value(mean, std):
 def main():
     # Collect results for all modes
     all_results = {}
-    modes_to_run = [1,2]
+    modes_to_run = [1, 2]
     
     for mode in modes_to_run:
         output = run_mode(mode)

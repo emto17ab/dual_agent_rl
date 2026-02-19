@@ -230,7 +230,7 @@ class AMoD:
             matched_leave_index = []
 
             for i, pax in enumerate(queueCurrent):
-                if accCurrent != 0:
+                if int(accCurrent) > 0:
                     accept = pax.match(t)
                     if accept:
                         matched_leave_index.append(i)

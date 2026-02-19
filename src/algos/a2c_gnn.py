@@ -318,14 +318,7 @@ class A2C(nn.Module):
                     desiredAcc = {env.region[i]: int(action_rl[i] *dictsum(env.acc,env.time+1))for i in range(len(env.region))}
 
                     # solve minimum rebalancing distance problem (Step 3 in paper)
-                    rebAction = solveRebFlow(
-                        env,
-                        "nyc_manhattan",
-                        desiredAcc,
-                        cplexpath,
-                        directory,
-                        job_id=self.job_id
-                    )
+                    rebAction = solveRebFlow(env, desiredAcc)
 
                     # Take rebalancing action in environment
                     _, rebreward, done, _, system_info, _, _ = env.reb_step(rebAction)
@@ -351,14 +344,7 @@ class A2C(nn.Module):
                     }
 
                     # solve minimum rebalancing distance problem (Step 3 in paper)
-                    rebAction = solveRebFlow(
-                        env,
-                        "nyc_manhattan",
-                        desiredAcc,
-                        cplexpath,
-                        directory,
-                        job_id=self.job_id
-                    )
+                    rebAction = solveRebFlow(env, desiredAcc)
 
                     # Take rebalancing action in environment
                     _, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)

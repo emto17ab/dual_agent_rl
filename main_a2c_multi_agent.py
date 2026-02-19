@@ -360,7 +360,7 @@ def test_agents(model_agents, test_episodes, env, cplexpath, directory, max_epis
                     # Compute rebalancing flows for both agents in parallel
                     with ThreadPoolExecutor(max_workers=2) as executor:
                         results = list(executor.map(
-                            lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], cplexpath, directory, a, max_episodes, mode, job_id=job_id),
+                            lambda a: solveRebFlow(env, desiredAcc[a], a),
                             [0, 1]
                         ))
                     rebAction = {0: results[0], 1: results[1]}
@@ -438,7 +438,7 @@ def test_agents(model_agents, test_episodes, env, cplexpath, directory, max_epis
                     # Compute rebalancing flows for both agents in parallel
                     with ThreadPoolExecutor(max_workers=2) as executor:
                         results = list(executor.map(
-                            lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], cplexpath, directory, a, max_episodes, mode, job_id=job_id),
+                            lambda a: solveRebFlow(env, desiredAcc[a], a),
                             [0, 1]
                         ))
                     rebAction = {0: results[0], 1: results[1]}
@@ -492,7 +492,7 @@ def test_agents(model_agents, test_episodes, env, cplexpath, directory, max_epis
                     # Solve rebalancing flows in parallel
                     with ThreadPoolExecutor(max_workers=2) as executor:
                         results = list(executor.map(
-                            lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], cplexpath, directory, a, max_episodes, mode, job_id=job_id),
+                            lambda a: solveRebFlow(env, desiredAcc[a], a),
                             [0, 1]
                         ))
                     rebAction = {0: results[0], 1: results[1]}
@@ -808,7 +808,7 @@ if not args.test:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}
@@ -971,7 +971,7 @@ if not args.test:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}
@@ -1029,7 +1029,7 @@ if not args.test:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}
@@ -1608,7 +1608,7 @@ else:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}
@@ -1710,14 +1710,24 @@ else:
                         # Fixed agent always uses 0.5 scalar
                         actions_price[a].append(1.0)  # 2 * 0.5 = 1.0 (base price)
                     else:
-                        actions_price[a].append(np.mean(2 * np.array(action_rl[a])[:, 0]))
+                        if args.od_price_actions:
+                            # OD: action shape [nregion, nregion+1], prices in [:, :nregion]
+                            actions_price[a].append(np.mean(2 * np.array(action_rl[a])[:, :env.nregion]))
+                        else:
+                            actions_price[a].append(np.mean(2 * np.array(action_rl[a])[:, 0]))
                 
                 # Track concentration (mode 2: Beta + Dirichlet)
                 for a in [0, 1]:
                     if a != args.fix_agent:
-                        actions_concentration_alpha[a].append(np.mean(concentrations[a][:, 0]))
-                        actions_concentration_beta[a].append(np.mean(concentrations[a][:, 1]))
-                        actions_concentration_dirichlet[a].append(np.mean(concentrations[a][:, 2]))
+                        if args.od_price_actions:
+                            # OD: concentrations is dict {'beta': [1, nregion, nregion, 2], 'dirichlet': [1, nregion, 1]}
+                            actions_concentration_alpha[a].append(np.mean(concentrations[a]['beta'][0, :, :, 0]))
+                            actions_concentration_beta[a].append(np.mean(concentrations[a]['beta'][0, :, :, 1]))
+                            actions_concentration_dirichlet[a].append(np.mean(concentrations[a]['dirichlet'][0, :, 0]))
+                        else:
+                            actions_concentration_alpha[a].append(np.mean(concentrations[a][:, 0]))
+                            actions_concentration_beta[a].append(np.mean(concentrations[a][:, 1]))
+                            actions_concentration_dirichlet[a].append(np.mean(concentrations[a][:, 2]))
 
                 # Track price scalars and rebalancing actions for visualization (last episode only)
                 if episode == 9:
@@ -1749,7 +1759,7 @@ else:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}
@@ -1851,7 +1861,7 @@ else:
                 # Compute rebalancing flows for both agents in parallel
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     results = list(executor.map(
-                        lambda a: solveRebFlow(env, "nyc_manhattan", desiredAcc[a], args.cplexpath, args.directory, a, args.max_episodes, args.mode, job_id=args.checkpoint_path),
+                        lambda a: solveRebFlow(env, desiredAcc[a], a),
                         [0, 1]
                     ))
                 rebAction = {0: results[0], 1: results[1]}

@@ -3,164 +3,74 @@ Minimal Rebalancing Cost
 ------------------------
 This file contains the specifications for the Min Reb Cost problem.
 """
-import os
-import subprocess
-import time
 from collections import defaultdict
-from src.misc.utils import mat2str
+from pulp import LpProblem, LpMinimize, LpVariable, lpSum, LpStatus, CPLEX_PY
 
 
-def solveRebFlow(env, res_path, desiredAcc, CPLEXPATH, directory, agent_id, max_episodes, mode, job_id=None):
+def solveRebFlow(env, desiredAcc, agent_id):
+
     t = env.time
+    edges = [(i, j) for i, j in env.G.edges]
 
-    # Format desired and current availability tuples
-    accRLTuple = [(n, int(desiredAcc[n])) for n in desiredAcc]
-    accTuple = [(n, int(env.agent_acc[agent_id][n][t+1])) for n in env.agent_acc[agent_id]]
+    # Map vehicle availability and desired vehicles for each region
+    #accTuple = [(n, int(env.agent_acc[agent_id][n][t+1])) for n in env.agent_acc[agent_id]]
+    acc_init = {n: int(env.agent_acc[agent_id][n][t+1]) for n in env.agent_acc[agent_id]}
+    #acc_init = {n: int(env.acc[n][t+1]) for n in env.acc}
+    desired_vehicles = {n: int(round(desiredAcc[n])) for n in desiredAcc}
 
-
-    edgeAttr = [(i, j, env.G.edges[i, j]['time']) for i, j in env.G.edges]
-
-    modPath = os.getcwd().replace('\\', '/')+'/src/cplex_mod/'
-    OPTPath = os.getcwd().replace('\\', '/') + '/' + directory + f'/cplex_logs/rebalancing/{res_path}_mode{mode}_{max_episodes}/'
+    region = [n for n in acc_init]
+    # Time on each edge (used in the objective)
+    time = {(i, j): env.G.edges[i, j]['time'] for i, j in edges}
+    tol = 1e-6
     
-    # Ensure directory creation is atomic and handle race conditions
-    try:
-        os.makedirs(OPTPath, exist_ok=True)
-        # Double-check the directory exists and is writable
-        if not os.path.exists(OPTPath):
-            raise OSError(f"Failed to create directory: {OPTPath}")
-        if not os.access(OPTPath, os.W_OK):
-            raise PermissionError(f"No write permission for directory: {OPTPath}")
-    except Exception as e:
-        print(f"Error creating output directory {OPTPath}: {e}")
-        raise e
-    
-    # Use job_id to make filenames unique across parallel jobs
-    file_suffix = f"_{job_id}_agent{agent_id}_{t}" if job_id else f"_agent{agent_id}_{t}"
-    datafile = OPTPath + f'data{file_suffix}.dat'
-    resfile = OPTPath + f'res{file_suffix}.dat'
-    
-    # Write data file with error handling
-    try:
-        with open(datafile, 'w') as file:
-            file.write('path="'+resfile+'";\r\n')
-            file.write('edgeAttr='+mat2str(edgeAttr)+';\r\n')
-            file.write('accInitTuple='+mat2str(accTuple)+';\r\n')
-            file.write('accRLTuple='+mat2str(accRLTuple)+';\r\n')
-            file.flush()
-            os.fsync(file.fileno())
+    def build_model(var_cat):
+        # Define the PuLP problem
+        model = LpProblem("RebalancingFlowMinimization", LpMinimize)
         
-        # Verify the file was written correctly
-        if not os.path.exists(datafile):
-            raise IOError(f"Data file does not exist: {datafile}")
-        if os.path.getsize(datafile) == 0:
-            raise IOError(f"Data file is empty: {datafile}")
-            
-    except Exception as e:
-        print(f"Error writing data file {datafile}: {e}")
-        raise e
-    modfile = modPath+'minRebDistRebOnly.mod'
-    if CPLEXPATH is None:
-        CPLEXPATH = "/opt/ibm/ILOG/CPLEX_Studio128/opl/bin/x86-64_linux/"
-    my_env = os.environ.copy()
-    my_env["LD_LIBRARY_PATH"] = CPLEXPATH
-    out_file = OPTPath + f'out{file_suffix}.dat'
-    
-    # Add error handling and better debugging with retry logic
-    max_retries = 3
-    retry_delay = 1.0  # Start with 1 second delay
-    
-    for attempt in range(max_retries + 1):
-        try:
-            # Ensure data and model files exist and are readable
-            if not os.path.exists(datafile):
-                raise FileNotFoundError(f"Data file not found: {datafile}")
-            if not os.path.exists(modfile):
-                raise FileNotFoundError(f"Model file not found: {modfile}")
-            if not os.access(datafile, os.R_OK):
-                raise PermissionError(f"Cannot read data file: {datafile}")
-            if not os.access(modfile, os.R_OK):
-                raise PermissionError(f"Cannot read model file: {modfile}")
-            
-            with open(out_file, 'w') as output_f:
-                subprocess.check_call(
-                    [CPLEXPATH+"oplrun", modfile, datafile], 
-                    stdout=output_f, 
-                    stderr=subprocess.STDOUT,  # Capture stderr in the output file
-                    env=my_env,
-                    timeout=60  # Add timeout to prevent hanging
-                )
-            output_f.close()
-            break  # Success, exit retry loop
-            
-        except subprocess.CalledProcessError as e:
-            if attempt < max_retries:
-                print(f"CPLEX attempt {attempt + 1} failed with return code {e.returncode}, retrying in {retry_delay:.1f}s...")
-                time.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-                continue
-            
-            # Final attempt failed, provide detailed error information
-            print(f"CPLEX Error: Command failed with return code {e.returncode} after {max_retries + 1} attempts")
-            print(f"Command: {e.cmd}")
-            print(f"CPLEX path: {CPLEXPATH}")
-            print(f"Data file: {datafile}")
-            print(f"Mod file: {modfile}")
-            print(f"Output file: {out_file}")
-            
-            # Try to read what was written to the output file for debugging
-            if os.path.exists(out_file):
-                try:
-                    with open(out_file, 'r') as f:
-                        error_output = f.read()
-                    print(f"CPLEX output/error:\n{error_output}")
-                except Exception as read_e:
-                    print(f"Could not read output file: {read_e}")
-            
-            # Re-raise the original exception
-            raise e
-            
-        except subprocess.TimeoutExpired as e:
-            if attempt < max_retries:
-                print(f"CPLEX attempt {attempt + 1} timed out, retrying in {retry_delay:.1f}s...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            print(f"CPLEX Error: Command timed out after {max_retries + 1} attempts")
-            raise e
-            
-        except (FileNotFoundError, PermissionError) as e:
-            if attempt < max_retries:
-                print(f"File access error on attempt {attempt + 1}: {e}, retrying in {retry_delay:.1f}s...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            print(f"File access error: {e}")
-            raise e
-            
-        except Exception as e:
-            if attempt < max_retries:
-                print(f"Unexpected error on attempt {attempt + 1}: {e}, retrying in {retry_delay:.1f}s...")
-                time.sleep(retry_delay)
-                retry_delay *= 2
-                continue
-            print(f"Unexpected error in solveRebFlow: {e}")
-            print(f"CPLEX path: {CPLEXPATH}")
-            print(f"Data file exists: {os.path.exists(datafile)}")
-            print(f"Mod file exists: {os.path.exists(modfile)}")
-            raise e
+        # Decision variables: rebalancing flow on each edge
+        rebFlow = {(i, j): LpVariable(f"rebFlow_{i}_{j}", lowBound=0, cat=var_cat) for (i, j) in edges}
 
-    # 3. collect results from file
-    flow = defaultdict(float)
-    with open(resfile, 'r', encoding="utf8") as file:
-        for row in file:
-            item = row.strip().strip(';').split('=')
-            if item[0] == 'flow':
-                values = item[1].strip(')]').strip('[(').split(')(')
-                for v in values:
-                    if len(v) == 0:
-                        continue
-                    i, j, f = v.split(',')
-                    flow[int(i), int(j)] = float(f)
-    action = [flow[i, j] for i, j in env.edges]
-    return action
+        # Objective: minimize total time (cost) of rebalancing flows
+        model += lpSum(rebFlow[(i, j)] * time[(i, j)] for (i, j) in edges), "TotalRebalanceCost"
+        
+        # Constraints for each region (node)
+        for k in region:
+            # 1. Flow conservation constraint (ensure net inflow/outflow achieves desired vehicle distribution)
+            model += (
+                lpSum(rebFlow[(j, i)]-rebFlow[(i, j)] for (i, j) in edges if j != i and i==k)
+            ) >= desired_vehicles[k] - acc_init[k], f"FlowConservation_{k}"
+
+            # 2. Rebalancing flows from region i should not exceed the available vehicles in region i
+            model += (
+                lpSum(rebFlow[(i, j)] for (i, j) in edges if i != j and i==k) <= acc_init[k], 
+                f"RebalanceSupply_{k}"
+            )
+        return model, rebFlow
+    
+    model, rebFlow = build_model('Continuous')
+    status = model.solve(CPLEX_PY(msg=False))
+    if LpStatus[status] != "Optimal":
+        print(f"Optimization failed with status: {LpStatus[status]}")
+        return None
+    else: 
+        fractional = False
+        flow = defaultdict(float)
+        for (i, j) in edges:
+            flow[(i, j)] = rebFlow[(i, j)].varValue
+            if abs(flow[(i, j)] - round(flow[(i, j)])) > tol: 
+                fractional = True
+                break 
+        if fractional:
+            print("Fractional solution detected, re-solving with integer constraints...")
+            model, rebFlow = build_model('Integer')
+            status = model.solve(CPLEX_PY(msg=False))
+            if LpStatus[status] != "Optimal":
+                print(f"Optimization failed with status: {LpStatus[status]} when enforcing integer constraints")
+                return None
+            else:
+                flow = defaultdict(float)
+                for (i, j) in edges:
+                    flow[(i, j)] = rebFlow[(i, j)].varValue
+        action = [flow[i,j] for i,j in env.edges]
+        return action
+ 

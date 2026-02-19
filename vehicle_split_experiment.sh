@@ -29,4 +29,4 @@ esac
 # Always use mode 2
 MODE=2
 
-python main_a2c_multi_agent.py --reward_scalar 2000 --critic_warmup_episodes 50 --mode $MODE --city "nyc_man_south" --q_lr 0.0005 --p_lr 0.0002 --actor_clip 1000 --critic_clip 1000 --max_episodes 150000 --od_price_observe --agent0_vehicle_ratio $RATIO --checkpoint_path dual_agent_nyc_man_south_vehicle_split_paper_ratio${RATIO}_mode${MODE}
+python main_a2c_multi_agent.py --reward_scalar 2000 --critic_warmup_episodes 50 --mode $MODE --city "nyc_man_south" --q_lr 0.0004 --p_lr 0.0002 --actor_clip 1000 --critic_clip 1000 --max_episodes 150000 --od_price_observe --od_price_actions --agent0_vehicle_ratio $RATIO --checkpoint_path dual_agent_nyc_man_south_vehicle_split_paper_ratio${RATIO}_mode${MODE}

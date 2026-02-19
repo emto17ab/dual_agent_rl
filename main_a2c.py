@@ -456,14 +456,7 @@ if not args.test:
                     desiredAcc = {env.region[i]: int(action_rl[i] *dictsum(env.acc,env.time+1))for i in range(len(env.region))}
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path  # Use checkpoint name to avoid conflicts
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
 
                 # Take rebalancing action in environment
                 new_obs, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)
@@ -547,14 +540,7 @@ if not args.test:
                     }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path  # Use checkpoint name to avoid conflicts
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
                 # Take rebalancing action in environment
                 new_obs, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)
                 episode_reward += rebreward
@@ -601,14 +587,7 @@ if not args.test:
                 }
                 
                 # Solve rebalancing flows
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
                 
                 # Execute rebalancing step
                 _, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)
@@ -958,14 +937,7 @@ else:
                 desiredAcc = {env.region[i]: int(action_rl[i] *dictsum(env.acc,env.time+1))for i in range(len(env.region))}
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path  # Use checkpoint name to avoid conflicts
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
 
                 # Take rebalancing action in environment
                 _, rebreward, done, _, system_info, _, _ = env.reb_step(rebAction)
@@ -991,14 +963,7 @@ else:
                 }
 
                 # solve minimum rebalancing distance problem (Step 3 in paper)
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path  # Use checkpoint name to avoid conflicts
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
 
                 # Take rebalancing action in environment
                 _, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)
@@ -1039,14 +1004,7 @@ else:
                 }
                 
                 # Solve rebalancing flows
-                rebAction = solveRebFlow(
-                    env,
-                    "nyc_manhattan",
-                    desiredAcc,
-                    args.cplexpath,
-                    args.directory,
-                    job_id=args.checkpoint_path
-                )
+                rebAction = solveRebFlow(env, desiredAcc)
                 
                 # Execute rebalancing step
                 _, rebreward, done, info, system_info, _, _ = env.reb_step(rebAction)
