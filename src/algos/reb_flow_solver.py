@@ -47,7 +47,6 @@ def solveRebFlow(env, desiredAcc):
     model, rebFlow = build_model('Continuous')
     status = model.solve(CPLEX_PY(msg=False))
     if LpStatus[status] != "Optimal":
-        print(f"Optimization failed with status: {LpStatus[status]}")
         return None
     else: 
         fractional = False
@@ -58,11 +57,9 @@ def solveRebFlow(env, desiredAcc):
                 fractional = True
                 break 
         if fractional:
-            print("Fractional solution detected, re-solving with integer constraints...")
             model, rebFlow = build_model('Integer')
             status = model.solve(CPLEX_PY(msg=False))
             if LpStatus[status] != "Optimal":
-                print(f"Optimization failed with status: {LpStatus[status]} when enforcing integer constraints")
                 return None
             else:
                 flow = defaultdict(float)
