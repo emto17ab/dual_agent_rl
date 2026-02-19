@@ -49,8 +49,7 @@ mkdir -p saved_files ckpt logs
 * `src/envs/amod_env.py`: AMoD simulator (single agent).
 * `src/envs/amod_env_multi.py`: AMoD simulator (multi-agent with fleet splitting).
 * `src/envs/structures.py`: Data structures used by the simulator.
-* `src/cplex_mod/`: CPLEX `.mod` formulations for rebalancing and matching problems.
-* `src/misc/`: Helper and utility functions.
+* `src/misc/`: Utility functions.
 * `data/`: Scenario JSON files and calibration data for supported cities.
 
 ### Supported Cities
