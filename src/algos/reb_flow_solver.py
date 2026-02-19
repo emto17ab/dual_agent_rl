@@ -68,5 +68,5 @@ def solveRebFlow(env, desiredAcc):
                 flow = defaultdict(float)
                 for (i, j) in edges:
                     flow[(i, j)] = rebFlow[(i, j)].varValue
-        action = [flow[i,j] for i,j in env.edges]
+        action = [int(round(flow[i,j])) for i,j in env.edges]
         return action

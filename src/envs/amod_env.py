@@ -69,10 +69,10 @@ class AMoD:
         self.nedge = [len(self.G.out_edges(n))+1 for n in self.region]
         for i, j in self.G.edges:
             self.G.edges[i, j]['time'] = self.rebTime[i, j][self.time]
-            self.rebFlow[i, j] = defaultdict(float)
-            self.rebFlow_ori[i, j] = defaultdict(float)
+            self.rebFlow[i, j] = defaultdict(int)
+            self.rebFlow_ori[i, j] = defaultdict(int)
         for i, j in self.demand:
-            self.paxFlow[i, j] = defaultdict(float)
+            self.paxFlow[i, j] = defaultdict(int)
             self.paxWait[i, j] = []
         # Store initial vehicle distribution for fixed baseline mode
         self.initial_acc = {}
@@ -80,15 +80,15 @@ class AMoD:
             initial_count = self.G.nodes[n]['accInit']
             self.acc[n][0] = initial_count
             self.initial_acc[n] = initial_count  # Store for fixed baseline
-            self.dacc[n] = defaultdict(float)
+            self.dacc[n] = defaultdict(int)
         # scenario.tstep: number of steps as one timestep
         self.beta = beta * scenario.tstep
         t = self.time
         self.servedDemand = defaultdict(dict)
         self.unservedDemand = defaultdict(dict)
         for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
-            self.unservedDemand[i, j] = defaultdict(float)
+            self.servedDemand[i, j] = defaultdict(int)
+            self.unservedDemand[i, j] = defaultdict(int)
 
         self.N = len(self.region)
 
@@ -230,7 +230,7 @@ class AMoD:
             matched_leave_index = []
 
             for i, pax in enumerate(queueCurrent):
-                if int(accCurrent) > 0:
+                if accCurrent > 0:
                     accept = pax.match(t)
                     if accept:
                         matched_leave_index.append(i)
@@ -315,10 +315,7 @@ class AMoD:
         # OPTIMIZED rebalancing loop: removed redundant edge check, pre-calculate reb_time and cost factor
         for k in range(len(self.edges)):
             i, j = self.edges[k]
-            # OPTIMIZED: Removed redundant edge validity check (self.edges built from self.G.edges)
-            # TODO: add check for actions respecting constraints? e.g. sum of all action[k] starting in "i" <= self.acc[i][t+1] (in addition to our agent action method)
-            # update the number of vehicles
-            self.rebAction[k] = min(self.acc[i][t+1], rebAction[k])
+            self.rebAction[k] = rebAction[k]
             
             # OPTIMIZED: Pre-calculate reb_time once (was looked up 4 times)
             reb_time = self.rebTime[i, j][t]
@@ -445,17 +442,17 @@ class AMoD:
 
         self.time = 0
         for i, j in self.G.edges:
-            self.rebFlow[i, j] = defaultdict(float)
-            self.rebFlow_ori[i,j] = defaultdict(float)
-            self.paxFlow[i, j] = defaultdict(float)
+            self.rebFlow[i, j] = defaultdict(int)
+            self.rebFlow_ori[i,j] = defaultdict(int)
+            self.paxFlow[i, j] = defaultdict(int)
             self.paxWait[i, j] = []
         for n in self.G:
             self.acc[n][0] = self.G.nodes[n]['accInit']
-            self.dacc[n] = defaultdict(float)
+            self.dacc[n] = defaultdict(int)
         t = self.time
         for i, j in self.demand:
-            self.servedDemand[i, j] = defaultdict(float)
-            self.unservedDemand[i, j] = defaultdict(float)
+            self.servedDemand[i, j] = defaultdict(int)
+            self.unservedDemand[i, j] = defaultdict(int)
         self.obs = (self.acc, self.time, self.dacc, self.demand)
         return self.obs
 

@@ -132,12 +132,12 @@ class AMoD:
         for i, j in self.G.edges:
             self.G.edges[i, j]['time'] = self.rebTime[i, j][self.time]
             for agent_id in self.agents:
-                self.agent_rebFlow[agent_id][i, j] = defaultdict(float)
-                self.agent_rebFlow_ori[agent_id][i, j] = defaultdict(float)
+                self.agent_rebFlow[agent_id][i, j] = defaultdict(int)
+                self.agent_rebFlow_ori[agent_id][i, j] = defaultdict(int)
 
         for i, j in self.demand:
             for agent_id in self.agents:
-                self.agent_paxFlow[agent_id][i, j] = defaultdict(float)
+                self.agent_paxFlow[agent_id][i, j] = defaultdict(int)
                 self.agent_paxWait[agent_id][i, j] = []
 
         # Initialize vehicle counts for each agent and region
@@ -151,7 +151,7 @@ class AMoD:
                 initial_count = self.G.nodes[n][acc_key]
                 self.agent_acc[agent_id][n][0] = initial_count
                 self.agent_initial_acc[agent_id][n] = initial_count  # Store for fixed agent
-                self.agent_dacc[agent_id][n] = defaultdict(float)
+                self.agent_dacc[agent_id][n] = defaultdict(int)
 
 
         # scenario.tstep: number of steps as one timestep
@@ -161,7 +161,7 @@ class AMoD:
         
         for agent_id in self.agents:
             for i, j in self.demand:
-                self.agent_demand[agent_id][i, j] = defaultdict(float)
+                self.agent_demand[agent_id][i, j] = defaultdict(int)
 
         self.agent_servedDemand = {agent_id: defaultdict(dict) for agent_id in self.agents}
         self.agent_unservedDemand = {agent_id: defaultdict(dict) for agent_id in self.agents}
@@ -169,8 +169,8 @@ class AMoD:
 
         for agent_id in self.agents:
             for i, j in self.demand:
-                self.agent_servedDemand[agent_id][i, j] = defaultdict(float)
-                self.agent_unservedDemand[agent_id][i, j] = defaultdict(float)
+                self.agent_servedDemand[agent_id][i, j] = defaultdict(int)
+                self.agent_unservedDemand[agent_id][i, j] = defaultdict(int)
 
         self.N = len(self.region)
 
@@ -428,7 +428,7 @@ class AMoD:
                 matched_leave_index = []
 
                 for i, pax in enumerate(queueCurrent):
-                    if int(accCurrent) > 0:
+                    if accCurrent > 0:
                         accept = pax.match(t)
                         if accept:
                             matched_leave_index.append(i)
@@ -535,8 +535,6 @@ class AMoD:
     
             for k in range(len(self.edges)):
                 i, j = self.edges[k]
-
-                rebAction[k] = min(self.agent_acc[agent_id][i][t+1], rebAction[k])
 
                 # OPTIMIZED: Pre-calculate reb_time once (was looked up 2 times)
                 reb_time = self.rebTime[i, j][t]
@@ -710,7 +708,7 @@ class AMoD:
             for agent_id in self.agents:
                 self.agent_price[agent_id][i, j][t] = p
                 if (i, j) not in self.agent_demand[agent_id]:
-                    self.agent_demand[agent_id][i, j] = defaultdict(float)
+                    self.agent_demand[agent_id][i, j] = defaultdict(int)
             
             if t not in self.regionDemand[i]:
                 self.regionDemand[i][t] = 0
@@ -720,24 +718,24 @@ class AMoD:
         
         for i, j in self.G.edges:
             for agent_id in self.agents:
-                self.agent_rebFlow[agent_id][i, j] = defaultdict(float)
-                self.agent_rebFlow_ori[agent_id][i, j] = defaultdict(float)
-                self.agent_paxFlow[agent_id][i, j] = defaultdict(float)
+                self.agent_rebFlow[agent_id][i, j] = defaultdict(int)
+                self.agent_rebFlow_ori[agent_id][i, j] = defaultdict(int)
+                self.agent_paxFlow[agent_id][i, j] = defaultdict(int)
                 self.agent_paxWait[agent_id][i, j] = []
         
         for agent_id in self.agents:
             for n in self.G:
                 acc_key = f'accInit_agent{agent_id}'
                 self.agent_acc[agent_id][n][0] = self.G.nodes[n][acc_key]
-                self.agent_dacc[agent_id][n] = defaultdict(float)
+                self.agent_dacc[agent_id][n] = defaultdict(int)
         
         self.agent_servedDemand = {agent_id: defaultdict(dict) for agent_id in self.agents}
         self.agent_unservedDemand = {agent_id: defaultdict(dict) for agent_id in self.agents}
         
         for agent_id in self.agents:
             for i, j in self.demand:
-                self.agent_servedDemand[agent_id][i, j] = defaultdict(float)
-                self.agent_unservedDemand[agent_id][i, j] = defaultdict(float)
+                self.agent_servedDemand[agent_id][i, j] = defaultdict(int)
+                self.agent_unservedDemand[agent_id][i, j] = defaultdict(int)
         
         self.agent_info = {agent_id: dict.fromkeys(['revenue', 'served_demand', 'unserved_demand',
                                     'rebalancing_cost', 'operating_cost', 'served_waiting', 
