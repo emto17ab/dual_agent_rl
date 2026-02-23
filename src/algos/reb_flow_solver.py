@@ -45,7 +45,7 @@ def solveRebFlow(env, desiredAcc):
         return model, rebFlow
     
     model, rebFlow = build_model('Continuous')
-    status = model.solve(CPLEX_PY(msg=False))
+    status = model.solve(CPLEX_PY(msg=False, threads=1, **{"preprocessing.presolve": 0}))
     if LpStatus[status] != "Optimal":
         return None
     else: 
@@ -58,7 +58,7 @@ def solveRebFlow(env, desiredAcc):
                 break 
         if fractional:
             model, rebFlow = build_model('Integer')
-            status = model.solve(CPLEX_PY(msg=False))
+            status = model.solve(CPLEX_PY(msg=False, threads=1, **{"preprocessing.presolve": 0}))
             if LpStatus[status] != "Optimal":
                 return None
             else:
