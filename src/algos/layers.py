@@ -52,18 +52,13 @@ class GNNActor(nn.Module):
             else:
                 self.lin3 = nn.Linear(hidden_size, 2)  # 2 Beta params
         else:
-            # Mode 2: pricing + rebalancing — fully separate MLPs
-            # Pricing head
-            self.price_lin1 = nn.Linear(in_channels, hidden_size)
-            self.price_lin2 = nn.Linear(hidden_size, hidden_size)
+            # Mode 2: pricing + rebalancing — shared MLP
+            self.lin1 = nn.Linear(in_channels, hidden_size)
+            self.lin2 = nn.Linear(hidden_size, hidden_size)
             if od_price_actions:
-                self.price_lin3 = nn.Linear(hidden_size, 2 * act_dim)  # 2 Beta params × N destinations
+                self.lin3 = nn.Linear(hidden_size, 2 * act_dim + 1)  # 2 Beta params × N destinations + 1 Dirichlet param
             else:
-                self.price_lin3 = nn.Linear(hidden_size, 2)  # 2 Beta params
-            # Rebalancing head
-            self.reb_lin1 = nn.Linear(in_channels, hidden_size)
-            self.reb_lin2 = nn.Linear(hidden_size, hidden_size)
-            self.reb_lin3 = nn.Linear(hidden_size, 1)  # 1 Dirichlet param
+                self.lin3 = nn.Linear(hidden_size, 3)  # 2 Beta params + 1 Dirichlet param
 
     def forward(self, data, deterministic=False):
         out = F.relu(self.conv1(data.x, data.edge_index))
@@ -89,25 +84,18 @@ class GNNActor(nn.Module):
                 assert x.shape == (1, self.act_dim, 2), f"Mode 1: Expected shape (1, {self.act_dim}, 2), got {x.shape}"
                 concentration = x + 1
         else:
-            # Fully separate MLPs for pricing and rebalancing
-            # Pricing head
-            x_price = F.leaky_relu(self.price_lin1(x))
-            x_price = F.leaky_relu(self.price_lin2(x_price))
-            x_price = F.softplus(self.price_lin3(x_price))
-            # Rebalancing head
-            x_reb = F.leaky_relu(self.reb_lin1(x))
-            x_reb = F.leaky_relu(self.reb_lin2(x_reb))
-            x_reb = F.softplus(self.reb_lin3(x_reb))
+            # Shared MLP for pricing and rebalancing
+            x = F.leaky_relu(self.lin1(x))
+            x = F.leaky_relu(self.lin2(x))
+            x = F.softplus(self.lin3(x))
             if self.od_price_actions:
-                assert x_price.shape == (1, self.act_dim, 2 * self.act_dim), f"Mode 2 OD: Expected price shape (1, {self.act_dim}, {2*self.act_dim}), got {x_price.shape}"
-                assert x_reb.shape == (1, self.act_dim, 1), f"Mode 2 OD: Expected reb shape (1, {self.act_dim}, 1), got {x_reb.shape}"
-                beta_params = x_price.view(1, self.act_dim, self.act_dim, 2) + 1
-                dirichlet_param = x_reb + 0.1
+                assert x.shape == (1, self.act_dim, 2 * self.act_dim + 1), f"Mode 2 OD: Expected shape (1, {self.act_dim}, {2*self.act_dim+1}), got {x.shape}"
+                beta_params = x[:, :, :2*self.act_dim].view(1, self.act_dim, self.act_dim, 2) + 1
+                dirichlet_param = x[:, :, 2*self.act_dim:].unsqueeze(-1) + 0.1
                 concentration = {'beta': beta_params, 'dirichlet': dirichlet_param}
             else:
-                assert x_price.shape == (1, self.act_dim, 2), f"Mode 2: Expected price shape (1, {self.act_dim}, 2), got {x_price.shape}"
-                assert x_reb.shape == (1, self.act_dim, 1), f"Mode 2: Expected reb shape (1, {self.act_dim}, 1), got {x_reb.shape}"
-                concentration = torch.cat([x_price + 1, x_reb + 0.1], dim=-1)  # [1, nregion, 3]
+                assert x.shape == (1, self.act_dim, 3), f"Mode 2: Expected shape (1, {self.act_dim}, 3), got {x.shape}"
+                concentration = torch.cat([x[:,:,:2] + 1, x[:,:,2:] + 0.1], dim=-1)  # [1, nregion, 3]
     
         if deterministic:
             if self.mode == 0:

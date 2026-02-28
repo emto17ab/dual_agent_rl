@@ -169,9 +169,3 @@ python main_a2c.py --city nyc_man_south --mode 3
 # Mode 4: fixed base price, uniform rebalancing
 python main_a2c.py --city nyc_man_south --mode 4
 ```
-
-## Credits
-This project builds on the codebase from [Learning joint rebalancing and dynamic pricing policies for Autonomous Mobility-on-Demand](https://ieeexplore.ieee.org/abstract/document/11063454) by Xingling Li, Carolin Schmidt, Daniele Gammelli, and Filipe Rodrigues.
-
-----------
-In case of any questions, bugs, suggestions or improvements, please feel free to contact me at emilkraghtoft@gmail.com
