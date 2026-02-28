@@ -36,45 +36,52 @@ class GNNActor(nn.Module):
         self.act_dim = act_dim
         self.od_price_actions = od_price_actions
         self.conv1 = GCNConv(in_channels, in_channels)
-        self.lin1 = nn.Linear(in_channels, hidden_size)
-        self.lin2 = nn.Linear(hidden_size, hidden_size)
         
         # Calculate output dimensions based on mode and OD pricing
         if mode == 0:
-            # Mode 0: rebalancing only (no pricing)
+            # Mode 0: rebalancing only — single MLP
+            self.lin1 = nn.Linear(in_channels, hidden_size)
+            self.lin2 = nn.Linear(hidden_size, hidden_size)
             self.lin3 = nn.Linear(hidden_size, 1)
         elif mode == 1:
-            # Mode 1: pricing only
+            # Mode 1: pricing only — single MLP
+            self.lin1 = nn.Linear(in_channels, hidden_size)
+            self.lin2 = nn.Linear(hidden_size, hidden_size)
             if od_price_actions:
-                # OD-based pricing: output N×N price scalars per region
-                # Each region outputs N scalars (one per destination)
                 self.lin3 = nn.Linear(hidden_size, 2 * act_dim)  # 2 Beta params × N destinations
             else:
-                # Origin-based pricing: output 1 price scalar per region
                 self.lin3 = nn.Linear(hidden_size, 2)  # 2 Beta params
         else:
-            # Mode 2: pricing + rebalancing
+            # Mode 2: pricing + rebalancing — fully separate MLPs
+            # Pricing head
+            self.price_lin1 = nn.Linear(in_channels, hidden_size)
+            self.price_lin2 = nn.Linear(hidden_size, hidden_size)
             if od_price_actions:
-                # OD-based pricing + rebalancing
-                self.lin3 = nn.Linear(hidden_size, 2 * act_dim + 1)  # (2 Beta params × N destinations) + 1 Dirichlet param
+                self.price_lin3 = nn.Linear(hidden_size, 2 * act_dim)  # 2 Beta params × N destinations
             else:
-                # Origin-based pricing + rebalancing
-                self.lin3 = nn.Linear(hidden_size, 3)  # 2 Beta params + 1 Dirichlet param
+                self.price_lin3 = nn.Linear(hidden_size, 2)  # 2 Beta params
+            # Rebalancing head
+            self.reb_lin1 = nn.Linear(in_channels, hidden_size)
+            self.reb_lin2 = nn.Linear(hidden_size, hidden_size)
+            self.reb_lin3 = nn.Linear(hidden_size, 1)  # 1 Dirichlet param
 
     def forward(self, data, deterministic=False):
         out = F.relu(self.conv1(data.x, data.edge_index))
         x = out + data.x
         x = x.reshape(-1, self.act_dim, self.in_channels)
-        x = F.leaky_relu(self.lin1(x))
-        x = F.leaky_relu(self.lin2(x))
-        
-        x = F.softplus(self.lin3(x))
-        
         if self.mode == 0:
+            # Single MLP
+            x = F.leaky_relu(self.lin1(x))
+            x = F.leaky_relu(self.lin2(x))
+            x = F.softplus(self.lin3(x))
             assert x.shape == (1, self.act_dim, 1), f"Mode 0: Expected shape (1, {self.act_dim}, 1), got {x.shape}"
             concentration = x.squeeze(-1) + 0.1
             assert concentration.shape == (1, self.act_dim), f"Mode 0: Expected concentration shape (1, {self.act_dim}), got {concentration.shape}"
         elif self.mode == 1:
+            # Single MLP
+            x = F.leaky_relu(self.lin1(x))
+            x = F.leaky_relu(self.lin2(x))
+            x = F.softplus(self.lin3(x))
             if self.od_price_actions:
                 assert x.shape == (1, self.act_dim, 2 * self.act_dim), f"Mode 1 OD: Expected shape (1, {self.act_dim}, {2*self.act_dim}), got {x.shape}"
                 concentration = x.view(1, self.act_dim, self.act_dim, 2) + 1
@@ -82,18 +89,25 @@ class GNNActor(nn.Module):
                 assert x.shape == (1, self.act_dim, 2), f"Mode 1: Expected shape (1, {self.act_dim}, 2), got {x.shape}"
                 concentration = x + 1
         else:
+            # Fully separate MLPs for pricing and rebalancing
+            # Pricing head
+            x_price = F.leaky_relu(self.price_lin1(x))
+            x_price = F.leaky_relu(self.price_lin2(x_price))
+            x_price = F.softplus(self.price_lin3(x_price))
+            # Rebalancing head
+            x_reb = F.leaky_relu(self.reb_lin1(x))
+            x_reb = F.leaky_relu(self.reb_lin2(x_reb))
+            x_reb = F.softplus(self.reb_lin3(x_reb))
             if self.od_price_actions:
-                assert x.shape == (1, self.act_dim, 2 * self.act_dim + 1), f"Mode 2 OD: Expected shape (1, {self.act_dim}, {2*self.act_dim + 1}), got {x.shape}"
-                concentration = x.clone()
-                beta_params = concentration[:, :, :2*self.act_dim].view(1, self.act_dim, self.act_dim, 2) + 1
-                dirichlet_param = concentration[:, :, 2*self.act_dim:] + 0.1
+                assert x_price.shape == (1, self.act_dim, 2 * self.act_dim), f"Mode 2 OD: Expected price shape (1, {self.act_dim}, {2*self.act_dim}), got {x_price.shape}"
+                assert x_reb.shape == (1, self.act_dim, 1), f"Mode 2 OD: Expected reb shape (1, {self.act_dim}, 1), got {x_reb.shape}"
+                beta_params = x_price.view(1, self.act_dim, self.act_dim, 2) + 1
+                dirichlet_param = x_reb + 0.1
                 concentration = {'beta': beta_params, 'dirichlet': dirichlet_param}
             else:
-                # Mode 2 origin: Beta + Dirichlet - keep [1, nregion, 3]
-                assert x.shape == (1, self.act_dim, 3), f"Mode 2: Expected shape (1, {self.act_dim}, 3), got {x.shape}"
-                concentration = x.clone()
-                concentration[:,:,:2] = concentration[:,:,:2] + 1  # Add 1 to Beta parameters
-                concentration[:,:,2] = concentration[:,:,2] + 0.1  # Add 0.1 to Dirichlet parameters
+                assert x_price.shape == (1, self.act_dim, 2), f"Mode 2: Expected price shape (1, {self.act_dim}, 2), got {x_price.shape}"
+                assert x_reb.shape == (1, self.act_dim, 1), f"Mode 2: Expected reb shape (1, {self.act_dim}, 1), got {x_reb.shape}"
+                concentration = torch.cat([x_price + 1, x_reb + 0.1], dim=-1)  # [1, nregion, 3]
     
         if deterministic:
             if self.mode == 0:

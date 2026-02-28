@@ -1052,7 +1052,7 @@ else:
         
         rebalancing_cost_steps.append(rebalancing_cost)
         queue_steps.append(np.mean(queue))
-        waiting_steps.append(episode_waiting/episode_served_demand)
+        waiting_steps.append(episode_waiting/episode_served_demand * args.json_tstep)
 
         rewards.append(episode_reward)
         demands.append(episode_served_demand)

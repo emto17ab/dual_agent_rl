@@ -1829,7 +1829,7 @@ else:
             for a in [0, 1]:
                 eps_demand[a] += info[a]["served_demand"]
                 eps_rebalancing_cost[a] += info[a]["rebalancing_cost"]
-                eps_waiting[a] += info[a]["served_waiting"]/eps_demand[a] if eps_demand[a] > 0 else 0
+                eps_waiting[a] += info[a]["served_waiting"]
         
         # After episode ends, capture episode-level metrics
         # Queue length: mean queue length across all regions for each agent (computed at episode end)
@@ -1872,6 +1872,10 @@ else:
         
         # Wage mean: average wage across all steps (only when use_dynamic_wage_man_south=True)
         eps_avg_wage = np.mean(eps_wage_samples) if len(eps_wage_samples) > 0 else None
+        
+        # Convert waiting time to minutes (from time steps)
+        for a in [0, 1]:
+            eps_waiting[a] = (eps_waiting[a] / eps_demand[a] * args.json_tstep) if eps_demand[a] > 0 else 0
         
         # Append episode results to epoch lists
         epoch_reward_list.append(eps_reward) # Done
